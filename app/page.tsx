@@ -1,95 +1,120 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
+
+import ImageLoader from "@/app/components/ImageLoader";
+import {
+  Center,
+  Checkbox,
+  Group,
+  Image,
+  NumberInput,
+  Stack,
+} from "@mantine/core";
+import { useEffect, useState } from "react";
+import { Rnd } from "react-rnd";
+
+type Box = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 export default function Home() {
+  const [imageUrl, setImageUrl] = useState<string>();
+  const [box, setBox] = useState<Box>({ x: 5, y: 5, width: 100, height: 100 });
+  const [lockAspectRatio, setLockAspectRatio] = useState(false);
+
+  useEffect(() => console.log(box), [box]);
+
   return (
-    <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>app/page.tsx</code>
-        </p>
-        <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
+    <>
+      <Center w={500}>
+        {imageUrl ? (
+          <Stack>
 
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+            <Group>
+              <NumberInput
+                label="X"
+                value={box.x}
+                min={1}
+                onChange={(value) => {
+                  setBox({ ...box, x: parseInt(value) });
+                }}
+                w={100}
+              />
 
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
+              <NumberInput
+                label="Y"
+                value={box.y}
+                min={1}
+                onChange={(value) => {
+                  setBox({ ...box, y: parseInt(value) });
+                }}
+                w={100}
+              />
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
+              <NumberInput
+                label="Width"
+                value={box.width}
+                min={1}
+                onChange={(value) => {
+                  setBox({ ...box, width: parseInt(value) });
+                }}
+                w={100}
+              />
 
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore starter templates for Next.js.</p>
-        </a>
+              <NumberInput
+                label="Height"
+                value={box.height}
+                min={1}
+                onChange={(value) => {
+                  setBox({ ...box, height: parseInt(value) });
+                }}
+                w={100}
+              />
 
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+              <Checkbox
+                label="Lock Aspect"
+                checked={lockAspectRatio}
+                onChange={(event) =>
+                  setLockAspectRatio(event.currentTarget.checked)
+                }
+              />
+            </Group>
+
+            <Stack>
+              <Rnd
+                bounds="parent"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "solid 1px red",
+                  background: "none",
+                }}
+                default={box}
+                onDragStop={(e, b) => {
+                  setBox({ ...box, x: b.x, y: b.y });
+                }}
+                onResizeStop={(e, direction, ref, delta, position) => {
+                  setBox({
+                    ...box,
+                    width: parseInt(ref.style.width),
+                    height: parseInt(ref.style.height),
+                  });
+                }}
+              />
+              <Image
+                style={{ border: "1px solid #ccc" }}
+                w={500}
+                src={imageUrl}
+              />
+            </Stack>
+          </Stack>
+        ) : (
+          <ImageLoader setImageUrl={setImageUrl} />
+        )}
+      </Center>
+    </>
   );
 }
