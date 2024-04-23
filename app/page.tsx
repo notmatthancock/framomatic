@@ -1,120 +1,199 @@
 "use client";
 
-import ImageLoader from "@/app/components/ImageLoader";
-import {
-  Center,
-  Checkbox,
-  Group,
-  Image,
-  NumberInput,
-  Stack,
-} from "@mantine/core";
-import { useEffect, useState } from "react";
+import { Box as MantineBox, Group, Image } from "@mantine/core";
+import { useElementSize } from "@mantine/hooks";
+import { useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-type Box = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+import Controls from "@/app/components/Controls";
+import FramePlayer from "@/app/components/FramePlayer";
+import ImageLoader from "@/app/components/ImageLoader";
+import type { Box, Frame, GridParams } from "@/app/types";
+import { setSourceMapsEnabled } from "process";
 
 export default function Home() {
+  ///////////////////////////////////////////////////////////////////
+  // State variables, refs, etc.
   const [imageUrl, setImageUrl] = useState<string>();
-  const [box, setBox] = useState<Box>({ x: 5, y: 5, width: 100, height: 100 });
-  const [lockAspectRatio, setLockAspectRatio] = useState(false);
+  const [imageData, setImageData] = useState<ImageData>();
+  const [userBoxColor, setUserBoxColor] = useState("#ff0000");
+  const [autoBoxColor, setautoBoxColor] = useState("#0000ff");
+  const imageCanvasRef = useRef<HTMLCanvasElement>(null);
+  const workerRef = useRef<Worker>();
+  const {
+    ref: imageRef,
+    width: imageWidth,
+    height: imageHeight,
+  } = useElementSize();
+  const [userBox, setUserBox] = useState<Box>({
+    x: 10,
+    y: 10,
+    width: 75,
+    height: 75,
+  });
+  const [gridParams, setGridParams] = useState<GridParams>({
+    xSpacing: 15,
+    ySpacing: 15,
+    numRows: 4,
+    numCols: 5,
+  });
+  const [autoBoxesLocked, setAutoBoxesLocked] = useState(true);
+  const [frames, setFrames] = useState<Frame[]>([]);
+  const [framesLoading, setFramesLoading] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1.0)
 
-  useEffect(() => console.log(box), [box]);
+  ///////////////////////////////////////////////////////////////////
+  // Hooks and what not
+  useEffect(() => {
+    if (imageData && workerRef.current) {
+      setFramesLoading(true);
+      workerRef.current.postMessage({
+        userBox: userBox,
+        gridParams: gridParams,
+        imageData: imageData,
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
+      });
+    }
+  }, [gridParams, imageData, imageHeight, imageWidth, userBox]);
+
+  useEffect(() => {
+    // Setup worker
+    workerRef.current = new Worker(
+      new URL("./frame-cropper.ts", import.meta.url)
+    );
+    workerRef.current.onmessage = (e) => {
+      setFrames(e.data.frames);
+      setFramesLoading(false);
+    };
+  }, []);
 
   return (
     <>
-      <Center w={500}>
+      <Group align="start">
+        <Controls
+          autoBoxColor={autoBoxColor}
+          autoBoxesLocked={autoBoxesLocked}
+          gridParams={gridParams}
+          setGridParams={setGridParams}
+          setAutoBoxColor={setautoBoxColor}
+          setAutoBoxesLocked={setAutoBoxesLocked}
+          setUserBox={setUserBox}
+          setUserBoxColor={setUserBoxColor}
+          userBox={userBox}
+          userBoxColor={userBoxColor}
+          loading={framesLoading}
+        />
         {imageUrl ? (
-          <Stack>
-
-            <Group>
-              <NumberInput
-                label="X"
-                value={box.x}
-                min={1}
-                onChange={(value) => {
-                  setBox({ ...box, x: parseInt(value) });
-                }}
-                w={100}
-              />
-
-              <NumberInput
-                label="Y"
-                value={box.y}
-                min={1}
-                onChange={(value) => {
-                  setBox({ ...box, y: parseInt(value) });
-                }}
-                w={100}
-              />
-
-              <NumberInput
-                label="Width"
-                value={box.width}
-                min={1}
-                onChange={(value) => {
-                  setBox({ ...box, width: parseInt(value) });
-                }}
-                w={100}
-              />
-
-              <NumberInput
-                label="Height"
-                value={box.height}
-                min={1}
-                onChange={(value) => {
-                  setBox({ ...box, height: parseInt(value) });
-                }}
-                w={100}
-              />
-
-              <Checkbox
-                label="Lock Aspect"
-                checked={lockAspectRatio}
-                onChange={(event) =>
-                  setLockAspectRatio(event.currentTarget.checked)
-                }
-              />
+          <>
+            <Group align="start">
+                <TransformWrapper panning={{disabled: true}} onZoomStop={(ref, event) => setZoomScale(ref.state.scale)}>
+                  <TransformComponent>
+              <MantineBox
+                w="fit-content"
+                m="auto"
+                pos="relative"
+                mah="calc(100% - 80px - (1rem * 2))"
+              >
+                <Rnd
+                  bounds={imageRef.current}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderColor: userBoxColor,
+                    borderStyle: "solid",
+                    borderWidth: "1px",
+                    background: "none",
+                  }}
+                  scale={zoomScale}
+                  lockAspectRatio={false}
+                  size={{ width: userBox.width, height: userBox.height }}
+                  position={{ x: userBox.x, y: userBox.y }}
+                  onDragStop={(e, b) => {
+                    setUserBox({ ...userBox, x: b.x, y: b.y });
+                  }}
+                  onResizeStop={(e, direction, ref, delta, position) => {
+                    setUserBox({
+                      width: parseInt(ref.style.width),
+                      height: parseInt(ref.style.height),
+                      ...position,
+                    });
+                  }}
+                />
+                {frames.map((frame, i) => {
+                  return (
+                    <>
+                      {i != 0 && (
+                        <Rnd
+                          key={i}
+                          bounds="parent"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "solid 1px blue",
+                            background: "none",
+                            borderColor: autoBoxColor,
+                            borderStyle: "solid",
+                            borderWidth: "1px",
+                          }}
+                          size={{ width: frame.width, height: frame.height }}
+                          position={{ x: frame.x, y: frame.y }}
+                          disableDragging={autoBoxesLocked}
+                          // onDragStop={(e, pos) =>
+                          //   setAutoBoxes(
+                          //     (boxes) => {
+                          //       return boxes.map((b, j) => {
+                          //         return i == j ? { ...b, x: pos.x, y: pos.y } : b;
+                          //       });
+                          //     }
+                          //     // autoBoxPositions.map((p, j) =>
+                          //     //   i == j ? { x: pos.x, y: pos.y } : p
+                          //     // )
+                          //   )
+                          // }
+                          enableResizing={false}
+                        />
+                      )}
+                    </>
+                  );
+                })}
+                    <Image
+                      ref={imageRef}
+                      style={{ border: "1px solid #ccc" }}
+                      radius="sm"
+                      alt="Main image to divide into animation frames"
+                      w={800}
+                      h="auto"
+                      src={imageUrl}
+                      onLoad={(e) => {
+                        const img: HTMLImageElement = e.currentTarget;
+                        const h = img.naturalHeight;
+                        const w = img.naturalWidth;
+                        const canvas = imageCanvasRef.current!;
+                        canvas.width = w;
+                        canvas.height = h;
+                        const context = canvas.getContext("2d")!;
+                        context.drawImage(img, 0, 0);
+                        setImageData(context.getImageData(0, 0, w, h));
+                      }}
+                    />
+              </MantineBox>
+                  </TransformComponent>
+                </TransformWrapper>
             </Group>
-
-            <Stack>
-              <Rnd
-                bounds="parent"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "solid 1px red",
-                  background: "none",
-                }}
-                default={box}
-                onDragStop={(e, b) => {
-                  setBox({ ...box, x: b.x, y: b.y });
-                }}
-                onResizeStop={(e, direction, ref, delta, position) => {
-                  setBox({
-                    ...box,
-                    width: parseInt(ref.style.width),
-                    height: parseInt(ref.style.height),
-                  });
-                }}
-              />
-              <Image
-                style={{ border: "1px solid #ccc" }}
-                w={500}
-                src={imageUrl}
-              />
-            </Stack>
-          </Stack>
+            <Group>
+              {/* Hidden canvas used to extract image pixel data */}
+              <canvas ref={imageCanvasRef} style={{ display: "none" }} />
+              {frames.length > 0 && <FramePlayer frames={frames} />}
+            </Group>
+          </>
         ) : (
           <ImageLoader setImageUrl={setImageUrl} />
         )}
-      </Center>
+      </Group>
     </>
   );
 }

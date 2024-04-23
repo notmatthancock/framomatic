@@ -12,11 +12,9 @@ export default function ImageLoader({ setImageUrl }: { setImageUrl: Dispatch<Set
         onDrop={(files) => setImageUrl(URL.createObjectURL(files[0]))}
         accept={IMAGE_MIME_TYPE}
         maxFiles={1}
-        my="xl"
+        // my="xl"
       >
         <Group
-          position="center"
-          spacing="xl"
           style={{ minHeight: rem(220), pointerEvents: "none" }}
         >
           <Dropzone.Accept>
