@@ -44,7 +44,7 @@ export default function RootLayout({
           >
             <AppShellHeader>
               <Group h="100%" px="md">
-                <Image src="logo.svg" h={30} />
+                <Image src="logo.png" alt="Framomatic logo" h={30} />
               </Group>
             </AppShellHeader>
             <AppShellMain>{children}</AppShellMain>

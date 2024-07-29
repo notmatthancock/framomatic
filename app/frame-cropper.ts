@@ -1,22 +1,21 @@
 import cropImageData from "crop-image-data";
 
 import { boxToCropOptions, rescaleBox } from "@/app/utils";
-import type { Box, GridParams } from "@/app/types";
+import type { Box, GridOptions } from "@/app/types";
 
 const generateFrames = (
-  userBox: Box,
-  gridParams: GridParams,
+  gridOptions: GridOptions,
   imageData: ImageData,
   imageWidth: number,
   imageHeight: number
 ) => {
   let frames = [];
 
-  for (let i = 0; i < gridParams.numRows; i++) {
-    for (let j = 0; j < gridParams.numCols; j++) {
+  for (let i = 0; i < gridOptions.numRows; i++) {
+    for (let j = 0; j < gridOptions.numCols; j++) {
       const box = {
-        x: userBox.x + j * (userBox.width + gridParams.xSpacing),
-        y: userBox.y + i * (userBox.height + gridParams.ySpacing),
+        x: userBox.x + j * (userBox.width + gridOptions.xSpacing),
+        y: userBox.y + i * (userBox.height + gridOptions.ySpacing),
         width: userBox.width,
         height: userBox.height,
       };
@@ -48,10 +47,9 @@ const generateFrames = (
 };
 
 onmessage = (e) => {
-  const { userBox, gridParams, imageData, imageWidth, imageHeight } = e.data;
+  const { gridParams, imageData, imageWidth, imageHeight } = e.data;
   postMessage({
     frames: generateFrames(
-      userBox,
       gridParams,
       imageData,
       imageWidth,

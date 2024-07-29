@@ -16,7 +16,7 @@ export function boxToCropOptions(box: Box, imageSize: Size): CropOptions {
     bottom: Math.round(imageSize.height - (box.y + box.height)),
     left: Math.round(box.x),
   };
-  return result
+  return result;
 }
 
 export function rescaleBox(box: Box, sourceSize: Size, targetSize: Size): Box {
@@ -28,11 +28,35 @@ export function rescaleBox(box: Box, sourceSize: Size, targetSize: Size): Box {
     width: box.width * horizontalFactor,
     height: box.height * verticalFactor,
   };
-  return result
+  return result;
 }
 
 // @ts-ignore
 export function cartesian(...a) {
   // @ts-ignore
   return a.reduce((a, b) => a.flatMap((d) => b.map((e) => [d, e].flat())));
+}
+
+type valueof<T> = T[keyof T];
+
+export function enumKeys<O extends object, K extends keyof O = keyof O>(
+  obj: O
+): K[] {
+  return Object.keys(obj) as K[];
+}
+
+export function enumEntries<
+  O extends object,
+  K extends keyof O = keyof O,
+  V extends valueof<O> = valueof<O>
+>(obj: O): [K, V][] {
+  return Object.entries(obj).map(([k, v]) => {
+    return [k as K, v as V]; //{ key: k as K, val: v as V };
+  });
+}
+
+export function enumValues<O extends object, V extends valueof<O> = valueof<O>>(
+  obj: O
+): V[] {
+  return Object.values(obj);
 }

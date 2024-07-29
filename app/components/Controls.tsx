@@ -1,38 +1,24 @@
 import {
   Card,
   Checkbox,
-  ColorInput,
   Group,
   LoadingOverlay,
   NumberInput,
+  Select,
+  Stack,
   Title,
 } from "@mantine/core";
 import { Dispatch, SetStateAction } from "react";
-import type { Box, GridParams } from "@/app/types";
+import { enumValues } from "@/app/utils";
+import { Box, GridOptions, ScanOrder, SelectionMode } from "@/app/types";
 
 export default function Controls({
-  autoBoxColor,
-  autoBoxesLocked,
-  gridParams,
-  setGridParams,
-  setAutoBoxColor,
-  setAutoBoxesLocked,
-  setUserBox,
-  setUserBoxColor,
-  userBox,
-  userBoxColor,
+  gridOptions,
+  setGridOptions,
   loading,
 }: {
-  autoBoxColor: string;
-  autoBoxesLocked: boolean;
-  gridParams: GridParams;
-  setGridParams: Dispatch<SetStateAction<GridParams>>;
-  setAutoBoxColor: Dispatch<SetStateAction<string>>;
-  setAutoBoxesLocked: Dispatch<SetStateAction<boolean>>;
-  setUserBox: Dispatch<SetStateAction<Box>>;
-  setUserBoxColor: Dispatch<SetStateAction<string>>;
-  userBox: Box;
-  userBoxColor: string;
+  gridOptions: GridOptions;
+  setGridOptions: Dispatch<SetStateAction<GridOptions>>;
   loading: boolean;
 }) {
   return (
@@ -44,106 +30,39 @@ export default function Controls({
       <Group>
         <NumberInput
           label="Rows"
-          value={gridParams.numRows}
+          value={gridOptions.numRows}
           min={1}
           w={100}
           onChange={(nRows) =>
-            setGridParams({
-              ...gridParams,
+            setGridOptions({
+              ...gridOptions,
               numRows: parseInt(nRows.toString()),
             })
           }
         />
         <NumberInput
           label="Columns"
-          value={gridParams.numCols}
+          value={gridOptions.numCols}
           min={1}
           w={100}
           onChange={(nCols) =>
-            setGridParams({
-              ...gridParams,
+            setGridOptions({
+              ...gridOptions,
               numCols: parseInt(nCols.toString()),
             })
           }
-        />
-      </Group>
-      <Group>
-        <NumberInput
-          label="Spacing X"
-          value={gridParams.xSpacing}
-          min={0}
-          w={100}
-          fixedDecimalScale={true}
-          decimalScale={2}
-          onChange={(dx) =>
-            setGridParams({
-              ...gridParams,
-              xSpacing: parseFloat(dx as string),
-            })
-          }
-        />
-        <NumberInput
-          label="Spacing Y"
-          value={gridParams.ySpacing}
-          min={0}
-          w={100}
-          fixedDecimalScale={true}
-          decimalScale={2}
-          onChange={(dy) =>
-            setGridParams({
-              ...gridParams,
-              ySpacing: parseFloat(dy as string),
-            })
-          }
-        />
-      </Group>
-
-      {/* userBox props */}
-      <Group>
-        <NumberInput
-          label="X"
-          value={userBox.x}
-          min={1}
-          onChange={(value) => {
-            setUserBox({
-              ...userBox,
-              x: parseFloat(value as string),
-            });
-          }}
-          stepHoldDelay={100}
-          stepHoldInterval={1}
-          w={100}
-          fixedDecimalScale={true}
-          decimalScale={2}
-        />
-
-        <NumberInput
-          label="Y"
-          value={userBox.y}
-          min={1}
-          onChange={(value) => {
-            setUserBox({
-              ...userBox,
-              y: parseFloat(value as string),
-            });
-          }}
-          stepHoldDelay={100}
-          stepHoldInterval={1}
-          w={100}
-          fixedDecimalScale={true}
-          decimalScale={2}
         />
       </Group>
 
       <Group>
         <NumberInput
           label="Width"
-          value={userBox.width}
+          value={gridOptions.frameWidth}
           min={1}
           onChange={(value) => {
-            setUserBox({
-              ...userBox,
-              width: parseFloat(value as string),
+            setGridOptions({
+              ...gridOptions,
+              frameWidth: parseFloat(value as string),
             });
           }}
           stepHoldDelay={100}
@@ -155,12 +74,12 @@ export default function Controls({
 
         <NumberInput
           label="Height"
-          value={userBox.height}
+          value={gridOptions.frameHeight}
           min={1}
           onChange={(value) => {
-            setUserBox({
-              ...userBox,
-              height: parseInt(value as string),
+            setGridOptions({
+              ...gridOptions,
+              frameHeight: parseInt(value as string),
             });
           }}
           stepHoldDelay={100}
@@ -171,27 +90,44 @@ export default function Controls({
         />
       </Group>
 
+      <Stack>
+        <Select
+          label="Selection Mode"
+          allowDeselect={false}
+          data={enumValues(SelectionMode)}
+          value={gridOptions.selectionMode}
+          onChange={(value) =>
+            setGridOptions({
+              ...gridOptions,
+              selectionMode: value as SelectionMode,
+            })
+          }
+        />
+        <Select
+          label="Scan Order"
+          allowDeselect={false}
+          data={enumValues(ScanOrder)}
+          value={gridOptions.scanOrder}
+          onChange={(value) =>
+            setGridOptions({
+              ...gridOptions,
+              scanOrder: value as ScanOrder,
+            })
+          }
+        />
+      </Stack>
+
       <Group>
         <Checkbox
           mt="md"
-          label="Lock auto boxes?"
-          checked={autoBoxesLocked}
-          onChange={(event) => setAutoBoxesLocked(event.currentTarget.checked)}
-        />
-      </Group>
-
-      <Group my="md">
-        <ColorInput
-          label="User box color"
-          value={userBoxColor}
-          onChange={setUserBoxColor}
-        />
-      </Group>
-      <Group>
-        <ColorInput
-          label="Auto box color"
-          value={autoBoxColor}
-          onChange={setAutoBoxColor}
+          label="Lock boxes?"
+          checked={gridOptions.locked}
+          onChange={(event) =>
+            setGridOptions({
+              ...gridOptions,
+              locked: event.currentTarget.checked,
+            })
+          }
         />
       </Group>
     </Card>
