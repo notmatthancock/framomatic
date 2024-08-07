@@ -2,49 +2,91 @@
 
 import { Box as MantineBox, Group, Image } from "@mantine/core";
 import { useElementSize } from "@mantine/hooks";
-import { useEffect, useRef, useState } from "react";
-import { Grid, Rnd } from "react-rnd";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { Rnd } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-import Controls from "@/app/components/Controls";
+import GridOptionsComponent from "@/app/components/GridOptionsComponent";
 import FramePlayer from "@/app/components/FramePlayer";
 import ImageLoader from "@/app/components/ImageLoader";
-import {
-  Frame,
-  GridOptions,
-  ScanOrder,
-  SelectionMode,
-  Size,
-} from "@/app/types";
+import { Frame, GridOptions, SelectionMode, Size } from "@/app/types";
 
 const defaultGridOptions: GridOptions = {
-  frameWidth: 20,
-  frameHeight: 20,
-  numRows: 5,
-  numCols: 5,
-  color: "red",
-  locked: false,
-  selectionMode: SelectionMode.FREE,
+  frameWidth: -1,
+  frameHeight: -1,
+  numRows: -1,
+  numCols: -1,
+  color: "#ff6666",
+  lockAspectRatio: false,
+  locked: true,
+  selectionMode: SelectionMode.EQUAL,
   startOffset: 0,
   endOffset: 0,
-  scanOrder: ScanOrder.COLS_FIRST,
 };
 
+// Fraction of image width/height to reserve for padding and spacing
+// during frame initialization.
+// These are just meant to supply *some* decent looking initialization
+// and are not terribly important.
+const initialPaddingFraction = 0.1;
+const initialFrameSizeFraction = 0.1;
+
+/**
+ * A heuristic to initialize frames to fit into a new image.
+ * This is used when the user adds a new image.
+ */
 const initializeFramePositions = (
   gridOptions: GridOptions,
   imageSize: Size
 ): Frame[] => {
-  const frameSize = Math.min(
-    Math.floor(imageSize.width / gridOptions.numCols),
-    Math.floor(imageSize.height / gridOptions.numRows)
-  );
-  gridOptions.frameWidth = gridOptions.frameWidth = frameSize;
-  const minHeight = gridOptions.numRows * frameSize;
-  const minWidth = gridOptions.numCols * frameSize;
-  const widthRemainder = imageSize.width - minWidth;
-  const heightRemainder = imageSize.height - minHeight;
+  const widthPadding = imageSize.width * initialPaddingFraction;
+  const widthMinusPadding = imageSize.width - 2 * widthPadding;
+  const heightPadding = imageSize.height * initialPaddingFraction;
+  const heightMinusPadding = imageSize.height - 2 * heightPadding;
 
-  return [];
+  const frameSize = Math.max(
+    Math.floor(imageSize.width * initialFrameSizeFraction),
+    Math.floor(imageSize.height * initialFrameSizeFraction)
+  );
+
+  gridOptions.frameWidth = gridOptions.frameHeight = frameSize;
+  gridOptions.numCols = Math.floor(widthMinusPadding / frameSize) -1;
+  gridOptions.numRows = Math.floor(heightMinusPadding / frameSize)-1;
+
+  const widthSpacing =
+    (widthMinusPadding - gridOptions.numCols * frameSize) /
+    (gridOptions.numCols - 1);
+  const heightSpacing =
+    (heightMinusPadding - gridOptions.numRows * frameSize) /
+    (gridOptions.numRows - 1);
+
+  console.debug({
+    imageSize,
+    gridOptions,
+    frameSize,
+    widthSpacing,
+    heightSpacing,
+  });
+
+  var frames: Frame[] = [];
+
+  for (var i = 0; i < gridOptions.numRows; i++) {
+    for (var j = 0; j < gridOptions.numCols; j++) {
+      frames.push({
+        // active if greater than or equal to offset value
+        active: i * gridOptions.numRows + j >= gridOptions.startOffset,
+        row: i,
+        col: j,
+        width: frameSize,
+        height: frameSize,
+        x: j * frameSize + j * widthSpacing + widthPadding,
+        y: i * frameSize + i * heightSpacing + heightPadding,
+        data: null,
+      });
+    }
+  }
+
+  return frames;
 };
 
 // const getFramePositions = (
@@ -77,16 +119,26 @@ export default function Home() {
   ///////////////////////////////////////////////////////////////////
   // Hooks and what not
   useEffect(() => {
-    if (imageData && workerRef.current) {
-      setFramesLoading(true);
-      workerRef.current.postMessage({
-        gridOptions: gridOptions,
-        imageData: imageData,
-        imageWidth: imageWidth,
-        imageHeight: imageHeight,
-      });
+    if (imageData === null || imageWidth == 0 || imageHeight == 0) {
+      return
     }
-  }, [gridOptions, imageData, imageHeight, imageWidth]);
+      // setFramesLoading(true);
+    if (frames.length == 0) {
+      setFrames(
+        initializeFramePositions(gridOptions, {
+          width: imageWidth,
+          height: imageHeight,
+        })
+      );
+      setGridOptions(gridOptions);
+    }
+      // workerRef.current.postMessage({
+      //   gridOptions: gridOptions,
+      //   imageData: imageData,
+      //   imageWidth: imageWidth,
+      //   imageHeight: imageHeight,
+      // });
+  }, [imageData, imageHeight, imageWidth]);
 
   useEffect(() => {
     // Setup worker
@@ -102,11 +154,14 @@ export default function Home() {
   return (
     <>
       <Group align="start">
-        <Controls
-          gridOptions={gridOptions}
-          setGridOptions={setGridOptions}
-          loading={framesLoading}
-        />
+        {imageUrl && (
+          <GridOptionsComponent
+            gridOptions={gridOptions}
+            setGridOptions={setGridOptions}
+            loading={framesLoading}
+            frames={frames}
+          />
+        )}
         {imageUrl ? (
           <>
             <Group align="start">
@@ -122,44 +177,45 @@ export default function Home() {
                     mah="calc(100% - 80px - (1rem * 2))"
                   >
                     {frames.map((frame, i) => {
+                      console.debug(frame);
                       return (
-                        <>
-                          {i != 0 && (
-                            <Rnd
-                              key={i}
-                              bounds="parent"
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                border: "solid 1px blue",
-                                background: "none",
-                                borderColor: gridOptions.color,
-                                borderStyle: "solid",
-                                borderWidth: "1px",
-                              }}
-                              size={{
-                                width: frame.width,
-                                height: frame.height,
-                              }}
-                              position={{ x: frame.x, y: frame.y }}
-                              disableDragging={gridOptions.locked}
-                              // onDragStop={(e, pos) =>
-                              //   setAutoBoxes(
-                              //     (boxes) => {
-                              //       return boxes.map((b, j) => {
-                              //         return i == j ? { ...b, x: pos.x, y: pos.y } : b;
-                              //       });
-                              //     }
-                              //     // autoBoxPositions.map((p, j) =>
-                              //     //   i == j ? { x: pos.x, y: pos.y } : p
-                              //     // )
-                              //   )
-                              // }
-                              enableResizing={false}
-                            />
-                          )}
-                        </>
+                        <Rnd
+                          key={i}
+                          bounds="parent"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "solid 1px blue",
+                            background: "none",
+                            borderColor: gridOptions.color,
+                            borderStyle: "solid",
+                            borderWidth: "1px",
+                          }}
+                          size={{
+                            width: frame.width,
+                            height: frame.height,
+                          }}
+                          lockAspectRatio={gridOptions.lockAspectRatio}
+                          position={{ x: frame.x, y: frame.y }}
+                          disableDragging={gridOptions.locked}
+                          onDragStop={(e, pos) => {
+                            console.log(i);
+                          }}
+                          // onDragStop={(e, pos) =>
+                          //   setAutoBoxes(
+                          //     (boxes) => {
+                          //       return boxes.map((b, j) => {
+                          //         return i == j ? { ...b, x: pos.x, y: pos.y } : b;
+                          //       });
+                          //     }
+                          //     // autoBoxPositions.map((p, j) =>
+                          //     //   i == j ? { x: pos.x, y: pos.y } : p
+                          //     // )
+                          //   )
+                          // }
+                          enableResizing={true}
+                        />
                       );
                     })}
                     <Image

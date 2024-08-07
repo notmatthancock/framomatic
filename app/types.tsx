@@ -18,18 +18,14 @@ export type Box = SpatialPosition & GridPosition & Size;
 export type Frame = Box & {
   // Cropped image data inside the respective box
   data: ImageData | null;
-  // 
+  // Is the frame active?
   active: boolean;
 };
 
 export enum SelectionMode {
-  FREE = "Free",
+  EQUAL = "Equal",
   ELASTIC = "Elastic",
-}
-
-export enum ScanOrder {
-  COLS_FIRST = "Columns First",
-  ROWS_FIRST = "Rows First",
+  FREE = "Free",
 }
 
 export type GridOptions = {
@@ -37,10 +33,10 @@ export type GridOptions = {
   frameHeight: number;
   numRows: number;
   numCols: number;
+  lockAspectRatio: boolean | number;
   locked: boolean;
   color: string;
   startOffset: number;
   endOffset: number;
   selectionMode: SelectionMode;
-  scanOrder: ScanOrder;
 };
