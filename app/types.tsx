@@ -20,6 +20,8 @@ export type Frame = Box & {
   data: ImageData | null;
   // Is the frame active?
   active: boolean;
+  // Is the frame's movement locked?
+  locked: boolean;
 };
 
 export enum SelectionMode {
@@ -35,7 +37,8 @@ export type GridOptions = {
   numCols: number;
   lockAspectRatio: boolean | number;
   locked: boolean;
-  color: string;
+  frameColor: string;
+  frameThickness: number;
   startOffset: number;
   endOffset: number;
   selectionMode: SelectionMode;

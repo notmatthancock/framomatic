@@ -1,22 +1,25 @@
 "use client";
 
-import { Box as MantineBox, Group, Image } from "@mantine/core";
+import { Box as MantineBox, Group, Image, Grid } from "@mantine/core";
 import { useElementSize } from "@mantine/hooks";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Rnd } from "react-rnd";
+import { Rnd, DraggableData } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { IconLock } from "@tabler/icons-react";
 
 import GridOptionsComponent from "@/app/components/GridOptionsComponent";
 import FramePlayer from "@/app/components/FramePlayer";
 import ImageLoader from "@/app/components/ImageLoader";
 import { Frame, GridOptions, SelectionMode, Size } from "@/app/types";
+import { framesOverlap } from "@/app/utils";
 
 const defaultGridOptions: GridOptions = {
   frameWidth: -1,
   frameHeight: -1,
   numRows: -1,
   numCols: -1,
-  color: "#ff6666",
+  frameColor: "#ff6666",
+  frameThickness: 1,
   lockAspectRatio: false,
   locked: true,
   selectionMode: SelectionMode.EQUAL,
@@ -50,8 +53,8 @@ const initializeFramePositions = (
   );
 
   gridOptions.frameWidth = gridOptions.frameHeight = frameSize;
-  gridOptions.numCols = Math.floor(widthMinusPadding / frameSize) -1;
-  gridOptions.numRows = Math.floor(heightMinusPadding / frameSize)-1;
+  gridOptions.numCols = Math.floor(widthMinusPadding / frameSize) - 1;
+  gridOptions.numRows = Math.floor(heightMinusPadding / frameSize) - 1;
 
   const widthSpacing =
     (widthMinusPadding - gridOptions.numCols * frameSize) /
@@ -82,6 +85,7 @@ const initializeFramePositions = (
         x: j * frameSize + j * widthSpacing + widthPadding,
         y: i * frameSize + i * heightSpacing + heightPadding,
         data: null,
+        locked: false,
       });
     }
   }
@@ -89,14 +93,62 @@ const initializeFramePositions = (
   return frames;
 };
 
-// const getFramePositions = (
-//   gridOptions: GridOptions,
-//   imageSize: Size,
-//   prevFrames: Frame[] | null = null,
-//   newFrame: Frame | null = null
-// ): Frame[] => {
-//   return [];
-// };
+const handleDragTopLeft = (
+  frames: Frame[],
+  dragData: DraggableData
+): Frame[] => [];
+const handleDragTopRight = (
+  frames: Frame[],
+  dragData: DraggableData
+): Frame[] => [];
+const handleDragBottomLeft = (
+  frames: Frame[],
+  dragData: DraggableData
+): Frame[] => [];
+const handleDragBottomRight = (
+  frames: Frame[],
+  dragData: DraggableData
+): Frame[] => [];
+
+const handleDrag = (
+  frame: Frame,
+  frames: Frame[],
+  dragData: DraggableData,
+  gridOptions: GridOptions
+): false | Frame[] => {
+  const lastRow = gridOptions.numRows - 1;
+  const lastCol = gridOptions.numCols - 1;
+  let newFrames: Frame[] = frames.map((f) => {
+    return { ...f, data: null };
+  });
+
+  // Top left corner
+  if (frame.row == 0 && frame.col == 0) {
+    // newFrames = handleDragTopLeft(frames, dragData)
+    newFrames.forEach((f) => {
+      if (f.row == lastRow && f.col == lastCol) return;
+      // Bottom row
+      if (f.row == lastRow) {
+        f.x += dragData.deltaX;
+        // Right column and not bottom right corner
+      } else if (f.col == lastCol) {
+        f.y += dragData.deltaY;
+      } else {
+        f.x += dragData.deltaX;
+        f.y += dragData.deltaY;
+      }
+    });
+  } else if (frame.row == 0 && frame.col == lastCol) {
+  }
+
+  // ...
+
+  if (framesOverlap(newFrames)) {
+    console.log('ho')
+    return false;
+  }
+  return newFrames;
+};
 
 export default function Home() {
   ///////////////////////////////////////////////////////////////////
@@ -120,9 +172,9 @@ export default function Home() {
   // Hooks and what not
   useEffect(() => {
     if (imageData === null || imageWidth == 0 || imageHeight == 0) {
-      return
+      return;
     }
-      // setFramesLoading(true);
+    // setFramesLoading(true);
     if (frames.length == 0) {
       setFrames(
         initializeFramePositions(gridOptions, {
@@ -132,12 +184,12 @@ export default function Home() {
       );
       setGridOptions(gridOptions);
     }
-      // workerRef.current.postMessage({
-      //   gridOptions: gridOptions,
-      //   imageData: imageData,
-      //   imageWidth: imageWidth,
-      //   imageHeight: imageHeight,
-      // });
+    // workerRef.current.postMessage({
+    //   gridOptions: gridOptions,
+    //   imageData: imageData,
+    //   imageWidth: imageWidth,
+    //   imageHeight: imageHeight,
+    // });
   }, [imageData, imageHeight, imageWidth]);
 
   useEffect(() => {
@@ -151,6 +203,10 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    // update frame data somehow?
+  }, [frames]);
+
   return (
     <>
       <Group align="start">
@@ -160,6 +216,8 @@ export default function Home() {
             setGridOptions={setGridOptions}
             loading={framesLoading}
             frames={frames}
+            setFrames={setFrames}
+            imageSize={{ width: imageWidth, height: imageHeight }}
           />
         )}
         {imageUrl ? (
@@ -177,7 +235,6 @@ export default function Home() {
                     mah="calc(100% - 80px - (1rem * 2))"
                   >
                     {frames.map((frame, i) => {
-                      console.debug(frame);
                       return (
                         <Rnd
                           key={i}
@@ -187,10 +244,12 @@ export default function Home() {
                             alignItems: "center",
                             justifyContent: "center",
                             border: "solid 1px blue",
-                            background: "none",
-                            borderColor: gridOptions.color,
+                            background: frame.locked
+                              ? "rgba(255, 255, 255, 0.85)"
+                              : "none",
+                            borderColor: gridOptions.frameColor,
                             borderStyle: "solid",
-                            borderWidth: "1px",
+                            borderWidth: `${gridOptions.frameThickness}px`,
                           }}
                           size={{
                             width: frame.width,
@@ -198,24 +257,30 @@ export default function Home() {
                           }}
                           lockAspectRatio={gridOptions.lockAspectRatio}
                           position={{ x: frame.x, y: frame.y }}
-                          disableDragging={gridOptions.locked}
-                          onDragStop={(e, pos) => {
-                            console.log(i);
+                          disableDragging={frame.locked}
+                          onDrag={(e, data) => {
+                            const newFrames = handleDrag(
+                              frame,
+                              frames,
+                              data,
+                              gridOptions
+                            );
+                            if (newFrames === false) {
+                              console.log("hi");
+                              return false; // discontinue drag
+                            }
+                            console.log(newFrames.length);
+                            setFrames(newFrames);
                           }}
                           // onDragStop={(e, pos) =>
-                          //   setAutoBoxes(
-                          //     (boxes) => {
-                          //       return boxes.map((b, j) => {
-                          //         return i == j ? { ...b, x: pos.x, y: pos.y } : b;
-                          //       });
-                          //     }
-                          //     // autoBoxPositions.map((p, j) =>
-                          //     //   i == j ? { x: pos.x, y: pos.y } : p
-                          //     // )
+                          //   setFrames((prevFrames) =>
+                          //     updateFramesFromDrag(prevFrames, i, pos)
                           //   )
                           // }
-                          enableResizing={true}
-                        />
+                          enableResizing={!frame.locked}
+                        >
+                          {frame.locked && <IconLock />}
+                        </Rnd>
                       );
                     })}
                     <Image

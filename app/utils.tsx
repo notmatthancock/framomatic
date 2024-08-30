@@ -1,5 +1,19 @@
 import type { CropOptions } from "crop-image-data";
-import type { Box, Size } from "@/app/types";
+import type { Box, Frame, GridOptions, Size } from "@/app/types";
+
+/** True if a corner frame */
+export function isCornerFrame(frame: Frame, gridOptions: GridOptions): boolean {
+  const row = frame.row;
+  const col = frame.col;
+  const lastRow = gridOptions.numRows - 1;
+  const lastCol = gridOptions.numCols - 1;
+  return (
+    (row == 0 && col == 0) ||
+    (row == 0 && col == lastCol) ||
+    (row == lastRow && col == 0) ||
+    (row == lastRow && col == lastCol)
+  );
+}
 
 /** True if two line segments (a1, b1) and (a2, b2) overlap */
 const overlaps1d = (
@@ -81,3 +95,36 @@ export function enumValues<O extends object, V extends valueof<O> = valueof<O>>(
 ): V[] {
   return Object.values(obj);
 }
+export const framesOverlap = (frames: Frame[]): boolean => {
+  // Brute force every pair of boxes and check for overlap
+  for (var i = 0; i < frames.length; i++) {
+    for (var j = i + 1; j < frames.length; j++) {
+      if (overlaps(frames[i], frames[j])) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+export const framesInBounds = (frames: Frame[], imageSize: Size): boolean => {
+  for (var i = 0; i < frames.length; i++) {
+    if (
+      frames[i].x < 0 ||
+      frames[i].x + frames[i].width > imageSize.width ||
+      frames[i].y < 0 ||
+      frames[i].y + frames[i].height > imageSize.height
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+export const getLockAspectRatio = (
+  gridOptions: GridOptions
+): boolean | number => {
+  if (gridOptions.lockAspectRatio === false) {
+    return false;
+  } else {
+    return gridOptions.frameWidth / gridOptions.frameHeight;
+  }
+};
