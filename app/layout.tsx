@@ -12,6 +12,7 @@ import {
   MantineProvider,
   Text,
 } from "@mantine/core";
+import { ModalsProvider } from "@mantine/modals";
 import type { Metadata } from "next";
 import { theme } from "../theme";
 
@@ -37,25 +38,27 @@ export default function RootLayout({
       </head>
       <body>
         <MantineProvider theme={theme}>
-          <AppShell
-            header={{ height: 60 }}
-            footer={{ height: 40 }}
-            padding="md"
-          >
-            <AppShellHeader>
-              <Group h="100%" px="md">
-                <Image src="logo.png" alt="Framomatic logo" h={30} />
-              </Group>
-            </AppShellHeader>
-            <AppShellMain>{children}</AppShellMain>
-            <AppShellFooter>
-              <Center>
-                <Text size="sm" c="dimmed">
-                  TODO add a footer with some info or whatever
-                </Text>
-              </Center>
-            </AppShellFooter>
-          </AppShell>
+          <ModalsProvider>
+            <AppShell
+              header={{ height: 60 }}
+              footer={{ height: 40 }}
+              padding="md"
+            >
+              <AppShellHeader>
+                <Group h="100%" px="md">
+                  <Image src="logo.png" alt="Framomatic logo" h={30} />
+                </Group>
+              </AppShellHeader>
+              <AppShellMain>{children}</AppShellMain>
+              <AppShellFooter>
+                <Center>
+                  <Text size="sm" c="dimmed">
+                    TODO add a footer with some info or whatever
+                  </Text>
+                </Center>
+              </AppShellFooter>
+            </AppShell>
+          </ModalsProvider>
         </MantineProvider>
       </body>
     </html>

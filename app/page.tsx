@@ -1,153 +1,55 @@
 "use client";
 
-import { Box as MantineBox, Group, Image, Grid } from "@mantine/core";
-import { useElementSize } from "@mantine/hooks";
+import {
+  Box as MantineBox,
+  Button,
+  Group,
+  Image,
+  Modal,
+  NumberInput,
+  Stack,
+  Title,
+  Text,
+} from "@mantine/core";
+import { useDisclosure, useElementSize } from "@mantine/hooks";
+import { modals } from "@mantine/modals";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Rnd, DraggableData } from "react-rnd";
+import { Rnd, DraggableData, ResizableDelta, Position } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { IconLock } from "@tabler/icons-react";
 
 import GridOptionsComponent from "@/app/components/GridOptionsComponent";
 import FramePlayer from "@/app/components/FramePlayer";
 import ImageLoader from "@/app/components/ImageLoader";
-import { Frame, GridOptions, SelectionMode, Size } from "@/app/types";
+import { Box, Frame, Grid, GridOptions, Size, WizardStep } from "@/app/types";
 import { framesOverlap } from "@/app/utils";
 
 const defaultGridOptions: GridOptions = {
   frameWidth: -1,
   frameHeight: -1,
-  numRows: -1,
-  numCols: -1,
   frameColor: "#ff6666",
   frameThickness: 1,
   lockAspectRatio: false,
-  locked: true,
-  selectionMode: SelectionMode.EQUAL,
-  startOffset: 0,
-  endOffset: 0,
 };
 
-// Fraction of image width/height to reserve for padding and spacing
-// during frame initialization.
-// These are just meant to supply *some* decent looking initialization
-// and are not terribly important.
-const initialPaddingFraction = 0.1;
 const initialFrameSizeFraction = 0.1;
 
-/**
- * A heuristic to initialize frames to fit into a new image.
- * This is used when the user adds a new image.
- */
-const initializeFramePositions = (
-  gridOptions: GridOptions,
-  imageSize: Size
-): Frame[] => {
-  const widthPadding = imageSize.width * initialPaddingFraction;
-  const widthMinusPadding = imageSize.width - 2 * widthPadding;
-  const heightPadding = imageSize.height * initialPaddingFraction;
-  const heightMinusPadding = imageSize.height - 2 * heightPadding;
-
-  const frameSize = Math.max(
-    Math.floor(imageSize.width * initialFrameSizeFraction),
-    Math.floor(imageSize.height * initialFrameSizeFraction)
-  );
-
-  gridOptions.frameWidth = gridOptions.frameHeight = frameSize;
-  gridOptions.numCols = Math.floor(widthMinusPadding / frameSize) - 1;
-  gridOptions.numRows = Math.floor(heightMinusPadding / frameSize) - 1;
-
-  const widthSpacing =
-    (widthMinusPadding - gridOptions.numCols * frameSize) /
-    (gridOptions.numCols - 1);
-  const heightSpacing =
-    (heightMinusPadding - gridOptions.numRows * frameSize) /
-    (gridOptions.numRows - 1);
-
-  console.debug({
-    imageSize,
-    gridOptions,
-    frameSize,
-    widthSpacing,
-    heightSpacing,
-  });
-
-  var frames: Frame[] = [];
-
-  for (var i = 0; i < gridOptions.numRows; i++) {
-    for (var j = 0; j < gridOptions.numCols; j++) {
-      frames.push({
-        // active if greater than or equal to offset value
-        active: i * gridOptions.numRows + j >= gridOptions.startOffset,
-        row: i,
-        col: j,
-        width: frameSize,
-        height: frameSize,
-        x: j * frameSize + j * widthSpacing + widthPadding,
-        y: i * frameSize + i * heightSpacing + heightPadding,
-        data: null,
-        locked: false,
-      });
-    }
-  }
-
-  return frames;
-};
-
-const handleDragTopLeft = (
-  frames: Frame[],
-  dragData: DraggableData
-): Frame[] => [];
-const handleDragTopRight = (
-  frames: Frame[],
-  dragData: DraggableData
-): Frame[] => [];
-const handleDragBottomLeft = (
-  frames: Frame[],
-  dragData: DraggableData
-): Frame[] => [];
-const handleDragBottomRight = (
-  frames: Frame[],
-  dragData: DraggableData
-): Frame[] => [];
-
-const handleDrag = (
-  frame: Frame,
-  frames: Frame[],
-  dragData: DraggableData,
-  gridOptions: GridOptions
-): false | Frame[] => {
-  const lastRow = gridOptions.numRows - 1;
-  const lastCol = gridOptions.numCols - 1;
-  let newFrames: Frame[] = frames.map((f) => {
-    return { ...f, data: null };
-  });
-
-  // Top left corner
-  if (frame.row == 0 && frame.col == 0) {
-    // newFrames = handleDragTopLeft(frames, dragData)
-    newFrames.forEach((f) => {
-      if (f.row == lastRow && f.col == lastCol) return;
-      // Bottom row
-      if (f.row == lastRow) {
-        f.x += dragData.deltaX;
-        // Right column and not bottom right corner
-      } else if (f.col == lastCol) {
-        f.y += dragData.deltaY;
-      } else {
-        f.x += dragData.deltaX;
-        f.y += dragData.deltaY;
-      }
-    });
-  } else if (frame.row == 0 && frame.col == lastCol) {
-  }
-
-  // ...
-
-  if (framesOverlap(newFrames)) {
-    console.log('ho')
-    return false;
-  }
-  return newFrames;
+const getInitialFrame = (imageSize: Size): Frame => {
+  const x = Math.floor(imageSize.width * initialFrameSizeFraction);
+  const y = Math.floor(imageSize.height * initialFrameSizeFraction);
+  const size = Math.max(x, y);
+  const firstFrame: Frame = {
+    row: 0,
+    col: 0,
+    x: x,
+    y: y,
+    width: size,
+    height: size,
+    data: null,
+    active: true,
+    locked: false,
+  };
+  return firstFrame;
 };
 
 export default function Home() {
@@ -162,11 +64,17 @@ export default function Home() {
     width: imageWidth,
     height: imageHeight,
   } = useElementSize();
+  const [gridDimensions, setGridDimensions] = useState<Grid>({
+    nRows: 0,
+    nCols: 0,
+  });
   const [gridOptions, setGridOptions] =
     useState<GridOptions>(defaultGridOptions);
   const [frames, setFrames] = useState<Frame[]>([]);
   const [framesLoading, setFramesLoading] = useState(false);
+  const [frameSpacingBox, setFrameSpacingBox] = useState<Box | undefined>();
   const [zoomScale, setZoomScale] = useState(1.0);
+  const [wizardStep, setWizardStep] = useState<WizardStep>(null);
 
   ///////////////////////////////////////////////////////////////////
   // Hooks and what not
@@ -176,40 +84,131 @@ export default function Home() {
     }
     // setFramesLoading(true);
     if (frames.length == 0) {
-      setFrames(
-        initializeFramePositions(gridOptions, {
-          width: imageWidth,
-          height: imageHeight,
-        })
-      );
-      setGridOptions(gridOptions);
+      const firstFrame = getInitialFrame({
+        width: imageWidth,
+        height: imageHeight,
+      });
+      setFrames([firstFrame]);
+      setGridOptions({
+        ...gridOptions,
+        frameWidth: firstFrame.width,
+        frameHeight: firstFrame.height,
+      });
+      setWizardStep("gridDims");
     }
-    // workerRef.current.postMessage({
-    //   gridOptions: gridOptions,
-    //   imageData: imageData,
-    //   imageWidth: imageWidth,
-    //   imageHeight: imageHeight,
-    // });
-  }, [imageData, imageHeight, imageWidth]);
+  }, [frames.length, gridOptions, imageData, imageHeight, imageWidth]);
+
+  // useEffect(() => {
+  //   // Setup worker
+  //   workerRef.current = new Worker(
+  //     new URL("./frame-cropper.ts", import.meta.url)
+  //   );
+  //   workerRef.current.onmessage = (e) => {
+  //     setFrames(e.data.frames);
+  //     setFramesLoading(false);
+  //   };
+  // }, []);
 
   useEffect(() => {
-    // Setup worker
+    // // Instantiate worker for doing frame extraction
     workerRef.current = new Worker(
-      new URL("./frame-cropper.ts", import.meta.url)
+      new URL("./crop-frames.ts", import.meta.url)
     );
+    // // Handle messages from worker
     workerRef.current.onmessage = (e) => {
-      setFrames(e.data.frames);
-      setFramesLoading(false);
+      const frame: Frame = e.data.frame;
+      setFrames((prevFrames) => [...prevFrames, frame]);
+      // setFramesLoading(false);
+    };
+    // // Cleanup the worker
+    return () => {
+      return workerRef.current!.terminate();
     };
   }, []);
 
   useEffect(() => {
-    // update frame data somehow?
-  }, [frames]);
+    if (workerRef.current !== undefined && wizardStep == "compute") {
+      workerRef.current.postMessage({
+        imageData: imageData,
+        firstFrame: frames[0],
+        frameSpacingBox: frameSpacingBox,
+        gridDimensions: gridDimensions,
+      });
+    }
+  }, [wizardStep]);
+
+  const [gridModalOpened, { open: openGridModal, close: closeGridModal }] =
+    useDisclosure(false);
 
   return (
     <>
       <Group align="start">
+        <Modal
+          opened={gridModalOpened}
+          onClose={closeGridModal}
+          withCloseButton={false}
+          closeOnClickOutside={false}
+          closeOnEscape={false}
+        >
+          <Stack>
+            <Group>
+              <NumberInput
+                label="Num. Rows"
+                value={gridDimensions.nRows}
+                onChange={(value) => {
+                  setGridDimensions({
+                    ...gridDimensions,
+                    nRows: parseInt(value as string),
+                  });
+                }}
+                min={1}
+                error={
+                  gridDimensions.nRows < 1
+                    ? "Num. Rows must be greater than 0"
+                    : false
+                }
+                placeholder="Enter the number of rows in the frame grid"
+                w={100}
+              />
+              <NumberInput
+                label="Num. Cols"
+                value={gridDimensions.nCols}
+                onChange={(value) => {
+                  setGridDimensions({
+                    ...gridDimensions,
+                    nCols: parseInt(value as string),
+                  });
+                }}
+                min={1}
+                error={
+                  gridDimensions.nCols < 1
+                    ? "Num. Cols must be greater than 0"
+                    : false
+                }
+                placeholder="Enter the number of rows in the frame grid"
+                w={100}
+              />
+            </Group>
+
+            <Text>
+              Configure the number of rows and columns in a sheet of animation
+              frames.
+            </Text>
+
+            <Title order={5}>Sheet Preview</Title>
+            <Image alt="Preview" src={imageUrl} />
+
+            <Button
+              onClick={() => {
+                setWizardStep("firstFrame");
+                closeGridModal();
+              }}
+              disabled={gridDimensions.nRows < 1 || gridDimensions.nCols < 1}
+            >
+              OK
+            </Button>
+          </Stack>
+        </Modal>
         {imageUrl && (
           <GridOptionsComponent
             gridOptions={gridOptions}
@@ -218,6 +217,9 @@ export default function Home() {
             frames={frames}
             setFrames={setFrames}
             imageSize={{ width: imageWidth, height: imageHeight }}
+            wizardStep={wizardStep}
+            setWizardStep={setWizardStep}
+            setFrameSpacingBox={setFrameSpacingBox}
           />
         )}
         {imageUrl ? (
@@ -234,55 +236,123 @@ export default function Home() {
                     pos="relative"
                     mah="calc(100% - 80px - (1rem * 2))"
                   >
-                    {frames.map((frame, i) => {
-                      return (
+                    {wizardStep != "frameSpacing" &&
+                      frames.map((frame, i) => {
+                        return (
+                          <Rnd
+                            key={i}
+                            bounds="parent"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              border: "solid 1px blue",
+                              background: frame.locked
+                                ? "rgba(255, 255, 255, 0.85)"
+                                : "none",
+                              borderColor: gridOptions.frameColor,
+                              borderStyle: "solid",
+                              borderWidth: `${gridOptions.frameThickness}px`,
+                            }}
+                            size={{
+                              width: frame.width,
+                              height: frame.height,
+                            }}
+                            lockAspectRatio={gridOptions.lockAspectRatio}
+                            position={{ x: frame.x, y: frame.y }}
+                            disableDragging={frame.locked}
+                            onDrag={(e, dragData: DraggableData) => {
+                              setFrames((prevFrames) => {
+                                return prevFrames.map((f) =>
+                                  f.row == frame.row && f.col == frame.col
+                                    ? { ...f, x: dragData.x, y: dragData.y }
+                                    : f
+                                );
+                              });
+                            }}
+                            onResize={(
+                              e,
+                              dir,
+                              ref,
+                              delta: ResizableDelta,
+                              pos: Position
+                            ) => {
+                              const width = parseInt(ref.style.width);
+                              const height = parseInt(ref.style.height);
+                              setFrames((prevFrames) => {
+                                return prevFrames.map((f) =>
+                                  f.row == frame.row && f.col == frame.col
+                                    ? {
+                                        ...f,
+                                        ...pos,
+                                        width: width,
+                                        height: height,
+                                      }
+                                    : f
+                                );
+                              });
+                              setGridOptions({
+                                ...gridOptions,
+                                frameWidth: width,
+                                frameHeight: height,
+                              });
+                            }}
+                            enableResizing={
+                              !frame.locked &&
+                              (wizardStep == "firstFrame" ||
+                                wizardStep == "free")
+                            }
+                          >
+                            {frame.locked && <IconLock />}
+                          </Rnd>
+                        );
+                      })}
+                    {wizardStep == "frameSpacing" &&
+                      frameSpacingBox !== undefined && (
                         <Rnd
-                          key={i}
-                          bounds="parent"
+                          key={frames.length}
+                          size={{
+                            width: frameSpacingBox.width,
+                            height: frameSpacingBox.height,
+                          }}
+                          position={{
+                            x: frameSpacingBox.x,
+                            y: frameSpacingBox.y,
+                          }}
+                          disableDragging={true}
                           style={{
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             border: "solid 1px blue",
-                            background: frame.locked
-                              ? "rgba(255, 255, 255, 0.85)"
-                              : "none",
+                            background: "none",
                             borderColor: gridOptions.frameColor,
                             borderStyle: "solid",
                             borderWidth: `${gridOptions.frameThickness}px`,
                           }}
-                          size={{
-                            width: frame.width,
-                            height: frame.height,
+                          // onResizeStart={(e, dir, ref) => {
+                          //   return false
+                          // }}
+                          enableResizing={{
+                            bottomRight: true,
+                            right: true,
+                            bottom: true,
                           }}
-                          lockAspectRatio={gridOptions.lockAspectRatio}
-                          position={{ x: frame.x, y: frame.y }}
-                          disableDragging={frame.locked}
-                          onDrag={(e, data) => {
-                            const newFrames = handleDrag(
-                              frame,
-                              frames,
-                              data,
-                              gridOptions
-                            );
-                            if (newFrames === false) {
-                              console.log("hi");
-                              return false; // discontinue drag
-                            }
-                            console.log(newFrames.length);
-                            setFrames(newFrames);
+                          onResize={(
+                            e,
+                            dir,
+                            ref,
+                            delta: ResizableDelta,
+                            pos: Position
+                          ) => {
+                            setFrameSpacingBox({
+                              ...frameSpacingBox,
+                              width: parseInt(ref.style.width),
+                              height: parseInt(ref.style.height),
+                            });
                           }}
-                          // onDragStop={(e, pos) =>
-                          //   setFrames((prevFrames) =>
-                          //     updateFramesFromDrag(prevFrames, i, pos)
-                          //   )
-                          // }
-                          enableResizing={!frame.locked}
-                        >
-                          {frame.locked && <IconLock />}
-                        </Rnd>
-                      );
-                    })}
+                        />
+                      )}
                     <Image
                       ref={imageRef}
                       style={{ border: "1px solid #ccc" }}
@@ -292,6 +362,7 @@ export default function Home() {
                       h="auto"
                       src={imageUrl}
                       onLoad={(e) => {
+                        openGridModal();
                         const img: HTMLImageElement = e.currentTarget;
                         const h = img.naturalHeight;
                         const w = img.naturalWidth;

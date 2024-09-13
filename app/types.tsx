@@ -3,6 +3,11 @@ export type SpatialPosition = {
   y: number;
 };
 
+export type Grid = {
+  nRows: number;
+  nCols: number;
+}
+
 export type GridPosition = {
   row: number;
   col: number;
@@ -24,22 +29,13 @@ export type Frame = Box & {
   locked: boolean;
 };
 
-export enum SelectionMode {
-  EQUAL = "Equal",
-  ELASTIC = "Elastic",
-  FREE = "Free",
-}
-
 export type GridOptions = {
   frameWidth: number;
   frameHeight: number;
-  numRows: number;
-  numCols: number;
   lockAspectRatio: boolean | number;
-  locked: boolean;
   frameColor: string;
   frameThickness: number;
-  startOffset: number;
-  endOffset: number;
-  selectionMode: SelectionMode;
 };
+
+
+export type WizardStep = null | "gridDims" | "firstFrame" | "frameSpacing" | "compute" | "free";

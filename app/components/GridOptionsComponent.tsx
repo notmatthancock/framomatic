@@ -1,4 +1,5 @@
 import {
+  Button,
   Card,
   Checkbox,
   ColorInput,
@@ -8,8 +9,10 @@ import {
   Select,
   Stack,
   Switch,
+  Text,
   Title,
 } from "@mantine/core";
+import { modals } from "@mantine/modals";
 import { Dispatch, SetStateAction, useState } from "react";
 
 import {
@@ -19,11 +22,12 @@ import {
   getLockAspectRatio,
 } from "@/app/utils";
 import {
+  Box,
   Frame,
   GridOptions,
   GridPosition,
-  SelectionMode,
   Size,
+  WizardStep,
 } from "@/app/types";
 
 /** used to for sorting frames in raster scan order */
@@ -37,126 +41,6 @@ const gridCompareFn = (p1: GridPosition, p2: GridPosition): 0 | -1 | 1 => {
   return p1.row < p2.row ? -1 : 1;
 };
 
-const extendRows = (
-  frames: Frame[],
-  prevNumRows: number,
-  currNumRows: number
-): Frame[] => {
-  const numNewRows = currNumRows - prevNumRows;
-  var newFrames: Frame[] = frames.map((f) => {
-    return { ...f, data: null };
-  });
-
-  // If the previous number of rows was singular, then we don't
-  // use the vertical spacing between frames to guess the offset
-  // for the next row. We just use a tenth of the frame height.
-  if (prevNumRows == 1) {
-    const offset = Math.max(1, Math.floor(frames[0].height * 0.1));
-    for (var newRowCount = 1; newRowCount <= numNewRows; newRowCount++) {
-      newFrames = [
-        ...newFrames,
-        ...frames.map((f) => {
-          return {
-            ...f,
-            data: null,
-            row: f.row + newRowCount,
-            y: f.y + (offset + f.height) * newRowCount,
-          };
-        }),
-      ];
-    }
-  } else {
-    // The strategy below is to iteratively take the last and second to
-    // last rows and compute the vertical spacing between each frame.
-    // This offset is potentially distinct for each column and is
-    // used to place each item in the new row.
-    var secondToLastRow: Frame[] = frames
-      .filter(
-        (f) => f.row == prevNumRows - 2 // minus 2 because Frame.row starts at 0
-      )
-      .sort((a, b) => a.col - b.col);
-    var lastRow: Frame[] = frames
-      .filter((f) => f.row == prevNumRows - 1)
-      .sort((a, b) => a.col - b.col);
-    for (var newRowCount = 1; newRowCount <= numNewRows; newRowCount++) {
-      var newRow: Frame[] = [];
-      for (var i = 0; i < lastRow.length; i++) {
-        var offset =
-          lastRow[i].y - (secondToLastRow[i].y + secondToLastRow[i].height);
-        newRow.push({
-          ...lastRow[i],
-          row: prevNumRows - 1 + newRowCount,
-          y: lastRow[i].y + lastRow[i].height + offset,
-        });
-      }
-      secondToLastRow = lastRow;
-      lastRow = newRow;
-      newFrames = newFrames.concat(newRow);
-    }
-  }
-
-  return newFrames;
-};
-
-const extendCols = (
-  frames: Frame[],
-  prevNumCols: number,
-  currNumCols: number
-): Frame[] => {
-  const numNewCols = currNumCols - prevNumCols;
-  var newFrames: Frame[] = frames.map((f) => {
-    return { ...f, data: null };
-  });
-
-  // If the previous number of cols was singular, then we don't
-  // use the horizontal spacing between frames to guess the offset
-  // for the next row. We just use a tenth of the frame width.
-  if (prevNumCols == 1) {
-    const offset = Math.max(1, Math.floor(frames[0].width * 0.1));
-    for (var newColCount = 1; newColCount <= numNewCols; newColCount++) {
-      newFrames = [
-        ...newFrames,
-        ...frames.map((f) => {
-          return {
-            ...f,
-            data: null,
-            col: f.col + newColCount,
-            x: f.x + (offset + f.width) * newColCount,
-          };
-        }),
-      ];
-    }
-  } else {
-    // The strategy used below is analogous to the approach in `extendRows`
-    // See comment there for details.
-    var secondToLastCol: Frame[] = frames
-      .filter(
-        (f) => f.col == prevNumCols - 2 // minus 2 because Frame.col starts at 0
-      )
-      .sort((a, b) => a.row - b.row);
-    var lastCol: Frame[] = frames
-      .filter((f) => f.col == prevNumCols - 1)
-      .sort((a, b) => a.row - b.row);
-    for (var newColCount = 1; newColCount <= numNewCols; newColCount++) {
-      var newCol: Frame[] = [];
-      for (var i = 0; i < lastCol.length; i++) {
-        var offset =
-          lastCol[i].x - (secondToLastCol[i].x + secondToLastCol[i].width);
-        newCol.push({
-          ...lastCol[i],
-          col: prevNumCols - 1 + newColCount,
-          x: lastCol[i].x + lastCol[i].width + offset,
-        });
-      }
-      secondToLastCol = lastCol;
-      lastCol = newCol;
-      newFrames = newFrames.concat(newCol);
-    }
-  }
-
-  return newFrames;
-};
-
 export default function GridOptionsComponent({
   gridOptions,
   setGridOptions,
@@ -164,6 +48,9 @@ export default function GridOptionsComponent({
   frames,
   setFrames,
   imageSize,
+  wizardStep,
+  setWizardStep,
+  setFrameSpacingBox,
 }: {
   gridOptions: GridOptions;
   setGridOptions: Dispatch<SetStateAction<GridOptions>>;
@@ -171,80 +58,26 @@ export default function GridOptionsComponent({
   frames: Frame[];
   setFrames: Dispatch<SetStateAction<Frame[]>>;
   imageSize: Size;
+  wizardStep: WizardStep;
+  setWizardStep: Dispatch<SetStateAction<WizardStep>>;
+  setFrameSpacingBox: Dispatch<SetStateAction<Box | undefined>>;
 }) {
   const [widthError, setWidthError] = useState<boolean | string>(false);
   const [heightError, setHeightError] = useState<boolean | string>(false);
-  const [rowsError, setRowsError] = useState<boolean | string>(false);
-  const [colsError, setColsError] = useState<boolean | string>(false);
+
+  let title = "";
+  if (wizardStep == "firstFrame") {
+    title = "Select Top Left Frame";
+  } else if (wizardStep == "frameSpacing") {
+    title = "Select 2x2 Top Left Frames";
+  }
 
   return (
     <Card withBorder radius="sm">
       <LoadingOverlay visible={loading} />
-      <Title order={4}>Controls</Title>
+      <Title order={4}>{title}</Title>
 
       {/* Grid props */}
-      <Group>
-        <NumberInput
-          label="Rows"
-          value={gridOptions.numRows}
-          min={1}
-          w={100}
-          error={rowsError}
-          onChange={(nRows) => {
-            const newNumRows = parseInt(nRows.toString());
-            if (newNumRows == gridOptions.numRows) return;
-
-            let newFrames: Frame[];
-            if (newNumRows > gridOptions.numRows) {
-              newFrames = extendRows(frames, gridOptions.numRows, newNumRows);
-              if (!framesInBounds(newFrames, imageSize)) {
-                setRowsError("frames exceed image bounds");
-                return;
-              }
-            } else {
-              newFrames = frames.filter((f) => f.row < newNumRows);
-            }
-
-            setRowsError(false);
-
-            setGridOptions({
-              ...gridOptions,
-              numRows: newNumRows,
-            });
-            setFrames(newFrames);
-          }}
-        />
-        <NumberInput
-          label="Columns"
-          value={gridOptions.numCols}
-          min={1}
-          w={100}
-          error={colsError}
-          onChange={(nCols) => {
-            const newNumCols = parseInt(nCols.toString());
-            if (newNumCols == gridOptions.numCols) return;
-
-            let newFrames: Frame[];
-            if (newNumCols > gridOptions.numCols) {
-              newFrames = extendCols(frames, gridOptions.numCols, newNumCols);
-              if (!framesInBounds(newFrames, imageSize)) {
-                setColsError("frames exceed image bounds");
-                return;
-              }
-            } else {
-              newFrames = frames.filter((f) => f.col < newNumCols);
-            }
-
-            setColsError(false);
-            setGridOptions({
-              ...gridOptions,
-              numCols: newNumCols,
-            });
-            setFrames(newFrames);
-          }}
-        />
-      </Group>
-
       <Group>
         <NumberInput
           label="Width"
@@ -252,22 +85,30 @@ export default function GridOptionsComponent({
           min={1}
           onChange={(value) => {
             const newWidth = parseFloat(value as string);
+
+            // possibly update height if aspect ratio is locked
+            const lockAspectRatio = getLockAspectRatio(gridOptions);
+            const newHeight =
+              lockAspectRatio !== false
+                ? newWidth / (lockAspectRatio as number)
+                : gridOptions.frameHeight;
+
+            // compute new frames
             const newFrames: Frame[] = frames.map((f) => {
-              return { ...f, data: null, width: newWidth };
+              return { ...f, data: null, width: newWidth, height: newHeight };
             });
-            if (!framesOverlap(newFrames)) {
-              setWidthError("frame overlap");
-              return;
-            }
             if (!framesInBounds(newFrames, imageSize)) {
               setWidthError("frames exceed image bounds");
               return;
             }
             setWidthError(false);
+
+            // update grid options and frames
             setGridOptions({
               ...gridOptions,
               frameWidth: newWidth,
-              lockAspectRatio: getLockAspectRatio(gridOptions),
+              frameHeight: newHeight,
+              lockAspectRatio: lockAspectRatio,
             });
             setFrames(newFrames);
           }}
@@ -285,22 +126,30 @@ export default function GridOptionsComponent({
           min={1}
           onChange={(value) => {
             const newHeight = parseFloat(value as string);
+
+            // possibly update height if aspect ratio is locked
+            const lockAspectRatio = getLockAspectRatio(gridOptions);
+            const newWidth =
+              lockAspectRatio !== false
+                ? newHeight * (lockAspectRatio as number)
+                : gridOptions.frameWidth;
+
+            // compute new frames
             const newFrames: Frame[] = frames.map((f) => {
-              return { ...f, data: null, height: newHeight };
+              return { ...f, data: null, width: newWidth, height: newHeight };
             });
-            if (!framesOverlap(newFrames)) {
-              setHeightError("frame overlap");
-              return;
-            }
             if (!framesInBounds(newFrames, imageSize)) {
               setHeightError("frames exceed image bounds");
               return;
             }
             setHeightError(false);
+
+            // update grid options and frames
             setGridOptions({
               ...gridOptions,
-              frameHeight: parseInt(value as string),
-              lockAspectRatio: getLockAspectRatio(gridOptions),
+              frameWidth: newWidth,
+              frameHeight: newHeight,
+              lockAspectRatio: lockAspectRatio,
             });
             setFrames(newFrames);
           }}
@@ -354,33 +203,69 @@ export default function GridOptionsComponent({
           w={200}
         />
 
-        <Select
-          label="Selection Mode"
-          allowDeselect={false}
-          data={enumValues(SelectionMode)}
-          value={gridOptions.selectionMode}
-          onChange={(value) =>
-            setGridOptions({
-              ...gridOptions,
-              selectionMode: value as SelectionMode,
-            })
-          }
-        />
+        {wizardStep == "firstFrame" && (
+          <Button
+            onClick={() =>
+              modals.openConfirmModal({
+                title: "Confirm top left placement",
+                children: (
+                  <>
+                    <Text>
+                      The box should be placed over the top left frame.
+                    </Text>
+                    <Text>
+                      For best results, ensure that the borders of the box have
+                      a little padding beyond the frame.
+                    </Text>
+                  </>
+                ),
+                labels: { cancel: "Cancel", confirm: "Submit" },
+                onConfirm: () => {
+                  const firstFrame = frames[0];
+                  setFrameSpacingBox({
+                    x: firstFrame.x,
+                    y: firstFrame.y,
+                    width: 2 * firstFrame.width,
+                    height: 2 * firstFrame.height,
+                    row: 0,
+                    col: 0,
+                  });
+                  setWizardStep("frameSpacing");
+                },
+              })
+            }
+          >
+            Next
+          </Button>
+        )}
+        {wizardStep == "frameSpacing" && (
+          <Button
+            onClick={() => {
+              modals.openConfirmModal({
+                title: "Confirm top left placement of 2x2 frames",
+                children: (
+                  <>
+                    <Text>
+                      The box should be placed over the top left 2x2 frames.
+                    </Text>
+                    <Text>
+                      This step is used to provide an initial estimate of the
+                      spacing between frames. The remaining frames are found
+                      automatically.
+                    </Text>
+                  </>
+                ),
+                labels: { cancel: "Cancel", confirm: "Submit" },
+                onConfirm: () => {
+                  setWizardStep("compute")
+                },
+              });
+            }}
+          >
+            Next
+          </Button>
+        )}
       </Stack>
-
-      <Group>
-        <Checkbox
-          mt="md"
-          label="Lock boxes?"
-          checked={gridOptions.locked}
-          onChange={(event) =>
-            setGridOptions({
-              ...gridOptions,
-              locked: event.currentTarget.checked,
-            })
-          }
-        />
-      </Group>
     </Card>
   );
 }

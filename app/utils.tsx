@@ -25,7 +25,7 @@ const overlaps1d = (
   return Math.min(b1, b2) > Math.max(a1, a2);
 };
 
-/** True if two box1 and box2 intersect */
+/** True if box1 and box2 intersect */
 export function overlaps(box1: Box, box2: Box): boolean {
   return (
     // overlaps in x
@@ -121,7 +121,7 @@ export const framesInBounds = (frames: Frame[], imageSize: Size): boolean => {
 };
 export const getLockAspectRatio = (
   gridOptions: GridOptions
-): boolean | number => {
+): false | number => {
   if (gridOptions.lockAspectRatio === false) {
     return false;
   } else {
