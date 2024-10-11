@@ -1,4 +1,4 @@
-import cv, { bool } from "@techstark/opencv-js";
+import cv from "@techstark/opencv-js";
 
 import { Box, Frame, Grid } from "@/app/types";
 
@@ -68,39 +68,69 @@ function locateNextFrame(
     );
   }
 
-  // adjustFramePosition(nextFrame, image, templateImage, searchSizeFraction);
+  const adjustedFrame = adjustFramePosition(nextFrame, image, templateImage, searchSizeFraction);
 
-  return nextFrame;
+  return adjustedFrame;
 }
 
-// function adjustFramePosition(
-//   frame: Frame,
-//   image: cv.Mat,
-//   templateImage: cv.Mat,
-//   searchSizeFraction: number,
-// ): void {
-//   if (image.channels !== 3) {
-//     throw new Error("Only RGB images supported (no grayscale or RGBA)");
-//   }
+function adjustFramePosition(
+  frame: Frame,
+  image: cv.Mat,
+  templateImage: cv.Mat,
+  searchSizeFraction: number
+): Frame {
+  const searchSizeWidth = Math.round(searchSizeFraction * frame.width);
+  const searchSizeHeight = Math.round(searchSizeFraction * frame.height);
 
-//   const searchSizeWidth = Math.round(searchSizeFraction * frame.width);
-//   const searchSizeHeight = Math.round(searchSizeFraction * frame.height);
+  const ymin = Math.max(0, frame.y - searchSizeHeight);
+  const ymax = Math.min(
+    image.rows - 1,
+    frame.y + frame.height + searchSizeHeight
+  );
+  const xmin = Math.max(0, frame.x - searchSizeWidth);
+  const xmax = Math.min(
+    image.cols - 1,
+    frame.x + frame.width + searchSizeWidth
+  );
 
-//   const imin = Math.max(0, frame.i - searchSizeHeight);
-//   const imax = Math.min(image.rows - 1, frame.i + frame.height + searchSizeHeight);
-//   const jmin = Math.max(0, frame.j - searchSizeWidth);
-//   const jmax = Math.min(image.cols - 1, frame.j + frame.width + searchSizeWidth);
+  // Cropped portion of the image to search for location of new frame
+  const searchImage = image.roi({
+    x: xmin,
+    y: ymin,
+    width: xmax - xmin,
+    height: ymax - ymin,
+  });
 
-//   // Cropped portion of the image to search for location of new frame
-//   const searchImage = image.roi({ x: jmin, y: imin, width: jmax - jmin, height: imax - imin });
+  let result = new cv.Mat(
+    searchImage.rows - templateImage.rows + 1,
+    searchImage.cols - templateImage.cols + 1,
+    cv.CV_32FC1
+  );
 
-//   let result = cv.matchTemplate(searchImage, templateImage, cv.TM_CCOEFF_NORMED);
-//   let minMax = result.minMaxLoc();
-//   const { maxLoc: { x: jbest, y: ibest } } = minMax;
+  cv.matchTemplate(searchImage, templateImage, result, cv.TM_CCOEFF_NORMED);
+  // @ts-ignore
+  let minMax = cv.minMaxLoc(result);
 
-//   frame.i = ibest + imin;
-//   frame.j = jbest + jmin;
-// }
+  // debug: ignore this below
+  const newSearch = new cv.Mat()
+  cv.cvtColor(searchImage, newSearch, cv.COLOR_RGB2RGBA)
+  if (frame.row == 4 && frame.col == 3) {
+  postMessage({
+    searchImage: new ImageData(
+      new Uint8ClampedArray(newSearch.data),
+      newSearch.cols,
+      newSearch.rows
+    ),
+    maxLoc: minMax.maxLoc,
+  });
+}
+
+  return {...frame, 
+   x: minMax.maxLoc.x + xmin,
+   y: minMax.maxLoc.y + ymin,
+  }
+
+}
 
 function cropFramesFromImage(
   image: cv.Mat,
@@ -112,7 +142,7 @@ function cropFramesFromImage(
   nLagFrames: number = 16,
   templateImage: cv.Mat | null = null
 ) {
-  if (nLagFrames < 1) {
+  if (nLagFrames <= 0) {
     throw new Error(`nLagFrames=${nLagFrames} must be greater than 0`);
   }
 
@@ -120,7 +150,7 @@ function cropFramesFromImage(
     templateImage = cropFromFrame(firstFrame, image);
   } else {
     // Only needed when handling sheets (images) beyond
-    // adjustFramePosition(firstFrame, image, templateImage, searchSizeFraction);
+    adjustFramePosition(firstFrame, image, templateImage, searchSizeFraction);
   }
 
   let currFrame = firstFrame;
@@ -140,30 +170,30 @@ function cropFramesFromImage(
       templateImage
     );
 
-    frames.push(nextFrame);
     // Keep only the last nLagFrames
+    frames.push(nextFrame);
     if (frames.length > nLagFrames) {
       frames = frames.slice(1);
     }
 
-    // let meanImage: cv.Mat = new cv.Mat(
-    //   templateImage.rows,
-    //   templateImage.cols,
-    //   templateImage.type,
-    //   [0, 0, 0]
-    // );
+    let meanImage: cv.Mat = new cv.Mat(
+      templateImage.rows,
+      templateImage.cols,
+      templateImage.type(),
+      [0, 0, 0, 0]
+    );
 
-    // for (const frame of frames) {
-    //   cv.addWeighted(
-    //     meanImage,
-    //     1,
-    //     cropFromFrame(frame, image),
-    //     1 / frames.length,
-    //     0,
-    //     meanImage
-    //   );
-    // }
-    // templateImage = meanImage;
+    for (const frame of frames) {
+      cv.addWeighted(
+        meanImage,
+        1,
+        cropFromFrame(frame, image),
+        1 / frames.length,
+        0,
+        meanImage
+      );
+    }
+    templateImage = meanImage;
 
     currFrame = nextFrame;
   }
@@ -173,7 +203,17 @@ function cropFramesFromImage(
 
 cv["onRuntimeInitialized"] = () => {
   onmessage = (e) => {
-    const { imageData, firstFrame, frameSpacingBox, gridDimensions } = e.data;
+    const {
+      imageData,
+      firstFrame,
+      frameSpacingBox,
+      gridDimensions,
+    }: {
+      imageData: ImageData;
+      firstFrame: Frame;
+      frameSpacingBox: Box;
+      gridDimensions: Grid;
+    } = e.data;
     const imageMat = cv.matFromImageData(imageData);
     const frameSpacingHeight = frameSpacingBox.height - 2 * firstFrame.height;
     const frameSpacingWidth = frameSpacingBox.width - 2 * firstFrame.width;

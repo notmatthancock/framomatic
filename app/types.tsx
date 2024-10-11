@@ -35,6 +35,9 @@ export type GridOptions = {
   lockAspectRatio: boolean | number;
   frameColor: string;
   frameThickness: number;
+  // debug props
+  x: number;
+  y: number;
 };
 
 

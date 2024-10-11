@@ -162,6 +162,81 @@ export default function GridOptionsComponent({
         />
       </Group>
 
+      {/* debug */}
+      <Group>
+        <NumberInput
+          label="X"
+          value={gridOptions.x}
+          min={1}
+          onChange={(value) => {
+            const newX = parseFloat(value as string);
+
+            // compute new frames
+            if (wizardStep == "firstFrame") {
+              const newFrames: Frame[] = [...frames];
+              frames[0].x = newX
+              setFrames(newFrames);
+            } else {
+              setFrameSpacingBox(b => {
+                if (b === undefined) return b;
+                return {
+                  ...b,
+                  width: newX - b.x,
+                }
+              })
+            }
+
+            // update grid options and frames
+            setGridOptions({
+              ...gridOptions,
+              x: newX
+            });
+          }}
+          stepHoldDelay={200}
+          stepHoldInterval={1}
+          w={100}
+          error={widthError}
+          fixedDecimalScale={true}
+          decimalScale={2}
+        />
+
+        <NumberInput
+          label="Y"
+          value={gridOptions.y}
+          min={1}
+          onChange={(value) => {
+            const newY = parseFloat(value as string);
+
+            // compute new frames
+            if (wizardStep == "firstFrame") {
+              const newFrames: Frame[] = [...frames];
+              frames[0].y = newY
+              setFrames(newFrames);
+            } else {
+              setFrameSpacingBox(b => {
+                if (b === undefined) return b;
+                return {
+                  ...b,
+                  height: newY - b.y,
+                }
+              })
+            }
+
+            // update grid options and frames
+            setGridOptions({
+              ...gridOptions,
+              y: newY
+            });
+          }}
+          stepHoldDelay={100}
+          stepHoldInterval={1}
+          w={100}
+          error={heightError}
+          fixedDecimalScale={true}
+          decimalScale={2}
+        />
+      </Group>
+
       <Stack mt="lg">
         <Switch
           label="Lock Aspect Ratio?"

@@ -1,19 +1,5 @@
 import type { CropOptions } from "crop-image-data";
-import type { Box, Frame, GridOptions, Size } from "@/app/types";
-
-/** True if a corner frame */
-export function isCornerFrame(frame: Frame, gridOptions: GridOptions): boolean {
-  const row = frame.row;
-  const col = frame.col;
-  const lastRow = gridOptions.numRows - 1;
-  const lastCol = gridOptions.numCols - 1;
-  return (
-    (row == 0 && col == 0) ||
-    (row == 0 && col == lastCol) ||
-    (row == lastRow && col == 0) ||
-    (row == lastRow && col == lastCol)
-  );
-}
+import type { Box, Frame, GridOptions, Size, SpatialPosition } from "@/app/types";
 
 /** True if two line segments (a1, b1) and (a2, b2) overlap */
 const overlaps1d = (
@@ -56,14 +42,13 @@ export function boxToCropOptions(box: Box, imageSize: Size): CropOptions {
 export function rescaleBox(box: Box, sourceSize: Size, targetSize: Size): Box {
   const horizontalFactor = targetSize.width / sourceSize.width;
   const verticalFactor = targetSize.height / sourceSize.height;
-  const result = {
+  return {
     ...box,
     x: box.x * horizontalFactor,
     y: box.y * verticalFactor,
     width: box.width * horizontalFactor,
     height: box.height * verticalFactor,
   };
-  return result;
 }
 
 // @ts-ignore

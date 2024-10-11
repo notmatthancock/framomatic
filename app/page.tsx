@@ -13,7 +13,14 @@ import {
 } from "@mantine/core";
 import { useDisclosure, useElementSize } from "@mantine/hooks";
 import { modals } from "@mantine/modals";
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Rnd, DraggableData, ResizableDelta, Position } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { IconLock } from "@tabler/icons-react";
@@ -22,7 +29,7 @@ import GridOptionsComponent from "@/app/components/GridOptionsComponent";
 import FramePlayer from "@/app/components/FramePlayer";
 import ImageLoader from "@/app/components/ImageLoader";
 import { Box, Frame, Grid, GridOptions, Size, WizardStep } from "@/app/types";
-import { framesOverlap } from "@/app/utils";
+import { framesOverlap, rescaleBox } from "@/app/utils";
 
 const defaultGridOptions: GridOptions = {
   frameWidth: -1,
@@ -30,6 +37,8 @@ const defaultGridOptions: GridOptions = {
   frameColor: "#ff6666",
   frameThickness: 1,
   lockAspectRatio: false,
+  x: 0,
+  y: 0,
 };
 
 const initialFrameSizeFraction = 0.1;
@@ -61,8 +70,8 @@ export default function Home() {
   const workerRef = useRef<Worker>();
   const {
     ref: imageRef,
-    width: imageWidth,
-    height: imageHeight,
+    width: imageElementWidth,
+    height: imageElementHeight,
   } = useElementSize();
   const [gridDimensions, setGridDimensions] = useState<Grid>({
     nRows: 0,
@@ -79,14 +88,14 @@ export default function Home() {
   ///////////////////////////////////////////////////////////////////
   // Hooks and what not
   useEffect(() => {
-    if (imageData === null || imageWidth == 0 || imageHeight == 0) {
+    if (imageData === null || imageRef.current === null) {
       return;
     }
     // setFramesLoading(true);
     if (frames.length == 0) {
       const firstFrame = getInitialFrame({
-        width: imageWidth,
-        height: imageHeight,
+        width: imageRef.current.naturalWidth,
+        height: imageRef.current.naturalHeight,
       });
       setFrames([firstFrame]);
       setGridOptions({
@@ -96,18 +105,7 @@ export default function Home() {
       });
       setWizardStep("gridDims");
     }
-  }, [frames.length, gridOptions, imageData, imageHeight, imageWidth]);
-
-  // useEffect(() => {
-  //   // Setup worker
-  //   workerRef.current = new Worker(
-  //     new URL("./frame-cropper.ts", import.meta.url)
-  //   );
-  //   workerRef.current.onmessage = (e) => {
-  //     setFrames(e.data.frames);
-  //     setFramesLoading(false);
-  //   };
-  // }, []);
+  }, [frames.length, gridOptions, imageData, imageRef]);
 
   useEffect(() => {
     // // Instantiate worker for doing frame extraction
@@ -116,9 +114,17 @@ export default function Home() {
     );
     // // Handle messages from worker
     workerRef.current.onmessage = (e) => {
-      const frame: Frame = e.data.frame;
-      setFrames((prevFrames) => [...prevFrames, frame]);
-      // setFramesLoading(false);
+      if ("frame" in e.data) {
+        const frame: Frame = e.data.frame;
+        setFrames((prevFrames) => [...prevFrames, frame]);
+        // setFramesLoading(false);
+        if (
+          frame.row == gridDimensions.nRows - 1 &&
+          frame.col == gridDimensions.nCols - 1
+        ) {
+          setWizardStep("free");
+        }
+      }
     };
     // // Cleanup the worker
     return () => {
@@ -139,6 +145,66 @@ export default function Home() {
 
   const [gridModalOpened, { open: openGridModal, close: closeGridModal }] =
     useDisclosure(false);
+
+  // Coordinate transform to "index space", the coordinate system
+  // of the full-res image
+  const toIndexSpace = (
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) => {
+    const sourceWidth = imageElementWidth;
+    const sourceHeight = imageElementHeight;
+    const targetWidth = imageRef.current!.naturalWidth;
+    const targetHeight = imageRef.current!.naturalHeight;
+    const horizontalFactor = targetWidth / sourceWidth;
+    const verticalFactor = targetHeight / sourceHeight;
+
+    return {
+      x: x * horizontalFactor,
+      y: y * verticalFactor,
+      width: width * horizontalFactor,
+      height: height * verticalFactor,
+    };
+  };
+
+  // coordinate transform to "element space", the coordinate
+  // system of the (probably smaller) html image element
+  const toElementSpace = (
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) => {
+    const sourceWidth = imageRef.current!.naturalWidth;
+    const sourceHeight = imageRef.current!.naturalHeight;
+    const targetWidth = imageElementWidth;
+    const targetHeight = imageElementHeight;
+    const horizontalFactor = targetWidth / sourceWidth;
+    const verticalFactor = targetHeight / sourceHeight;
+
+    return {
+      x: x * horizontalFactor,
+      y: y * verticalFactor,
+      width: width * horizontalFactor,
+      height: height * verticalFactor,
+    };
+  };
+
+  let frameSpacingElementSpace: Omit<Box, "row" | "col">;
+  if (wizardStep == "frameSpacing" && frameSpacingBox !== undefined) {
+    frameSpacingElementSpace = toElementSpace(
+      frameSpacingBox.x,
+      frameSpacingBox.y,
+      frameSpacingBox.width,
+      frameSpacingBox.height
+    );
+  }
+  else {
+    // placeholder
+    frameSpacingElementSpace = {x: 0, y: 0, width: 1, height: 1} 
+  }
 
   return (
     <>
@@ -216,7 +282,9 @@ export default function Home() {
             loading={framesLoading}
             frames={frames}
             setFrames={setFrames}
-            imageSize={{ width: imageWidth, height: imageHeight }}
+            // TODO: since frames are in image coord size,
+            // this needs to supply the image ref natural width / height
+            imageSize={{ width: imageElementWidth, height: imageElementHeight }}
             wizardStep={wizardStep}
             setWizardStep={setWizardStep}
             setFrameSpacingBox={setFrameSpacingBox}
@@ -237,7 +305,14 @@ export default function Home() {
                     mah="calc(100% - 80px - (1rem * 2))"
                   >
                     {wizardStep != "frameSpacing" &&
+                      imageRef.current !== null &&
                       frames.map((frame, i) => {
+                        const elementBox = toElementSpace(
+                          frame.x,
+                          frame.y,
+                          frame.width,
+                          frame.height
+                        );
                         return (
                           <Rnd
                             key={i}
@@ -255,22 +330,42 @@ export default function Home() {
                               borderWidth: `${gridOptions.frameThickness}px`,
                             }}
                             size={{
-                              width: frame.width,
-                              height: frame.height,
+                              width: elementBox.width!,
+                              height: elementBox.height!,
                             }}
                             lockAspectRatio={gridOptions.lockAspectRatio}
-                            position={{ x: frame.x, y: frame.y }}
+                            position={{ x: elementBox.x!, y: elementBox.y! }}
                             disableDragging={frame.locked}
                             onDrag={(e, dragData: DraggableData) => {
+                              // Reset the frames. The only frame that
+                              // is being changed is the one that is
+                              // dragged. For the dragged frame, we need
+                              // to remap the coordinate of the drag from
+                              // element space to index space.
                               setFrames((prevFrames) => {
-                                return prevFrames.map((f) =>
-                                  f.row == frame.row && f.col == frame.col
-                                    ? { ...f, x: dragData.x, y: dragData.y }
-                                    : f
-                                );
+                                return prevFrames.map((f) => {
+                                  if (
+                                    f.row != frame.row ||
+                                    f.col != frame.col
+                                  ) {
+                                    return f;
+                                  }
+                                  const newCoords = toIndexSpace(
+                                    dragData.x,
+                                    dragData.y,
+                                    // Placeholders for width and height
+                                    -1,
+                                    -1
+                                  );
+                                  return {
+                                    ...f,
+                                    x: newCoords.x!,
+                                    y: newCoords.y!,
+                                  };
+                                });
                               });
                             }}
-                            onResize={(
+                            onResizeStop={(
                               e,
                               dir,
                               ref,
@@ -279,17 +374,35 @@ export default function Home() {
                             ) => {
                               const width = parseInt(ref.style.width);
                               const height = parseInt(ref.style.height);
+
+                              let deltaW: number,
+                                deltaH: number,
+                                deltaX: number,
+                                deltaY: number;
+
+                              // Need to figure out the delta in position and size
+                              const r = toIndexSpace(
+                                pos.x,
+                                pos.y,
+                                width,
+                                height
+                              );
+                              // r.* are all defined because pos, width, and height are
+                              deltaW = r.width! - frame.width;
+                              deltaH = r.height! - frame.height;
+                              deltaX = r.x! - frame.x;
+                              deltaY = r.y! - frame.y;
+
                               setFrames((prevFrames) => {
-                                return prevFrames.map((f) =>
-                                  f.row == frame.row && f.col == frame.col
-                                    ? {
-                                        ...f,
-                                        ...pos,
-                                        width: width,
-                                        height: height,
-                                      }
-                                    : f
-                                );
+                                return prevFrames.map((f) => {
+                                  return {
+                                    ...f,
+                                    x: f.x + deltaX,
+                                    y: f.y + deltaY,
+                                    width: f.width + deltaW,
+                                    height: f.height + deltaH,
+                                  };
+                                });
                               });
                               setGridOptions({
                                 ...gridOptions,
@@ -312,12 +425,12 @@ export default function Home() {
                         <Rnd
                           key={frames.length}
                           size={{
-                            width: frameSpacingBox.width,
-                            height: frameSpacingBox.height,
+                            width: frameSpacingElementSpace.width,
+                            height: frameSpacingElementSpace.height,
                           }}
                           position={{
-                            x: frameSpacingBox.x,
-                            y: frameSpacingBox.y,
+                            x: frameSpacingElementSpace.x,
+                            y: frameSpacingElementSpace.y,
                           }}
                           disableDragging={true}
                           style={{
@@ -330,9 +443,6 @@ export default function Home() {
                             borderStyle: "solid",
                             borderWidth: `${gridOptions.frameThickness}px`,
                           }}
-                          // onResizeStart={(e, dir, ref) => {
-                          //   return false
-                          // }}
                           enableResizing={{
                             bottomRight: true,
                             right: true,
@@ -345,10 +455,11 @@ export default function Home() {
                             delta: ResizableDelta,
                             pos: Position
                           ) => {
+                            const indexBox = toIndexSpace(-1, -1, parseFloat(ref.style.width), parseFloat(ref.style.height))
                             setFrameSpacingBox({
                               ...frameSpacingBox,
-                              width: parseInt(ref.style.width),
-                              height: parseInt(ref.style.height),
+                              width: indexBox.width,
+                              height: indexBox.height,
                             });
                           }}
                         />
@@ -358,7 +469,7 @@ export default function Home() {
                       style={{ border: "1px solid #ccc" }}
                       radius="sm"
                       alt="Main image to divide into animation frames"
-                      w={800}
+                      w={500}
                       h="auto"
                       src={imageUrl}
                       onLoad={(e) => {
