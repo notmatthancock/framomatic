@@ -15,12 +15,7 @@ import {
 import { modals } from "@mantine/modals";
 import { Dispatch, SetStateAction, useState } from "react";
 
-import {
-  enumValues,
-  framesInBounds,
-  framesOverlap,
-  getLockAspectRatio,
-} from "@/app/utils";
+import { framesInBounds, getLockAspectRatio } from "@/app/utils";
 import {
   Box,
   Frame,
@@ -30,16 +25,9 @@ import {
   WizardStep,
 } from "@/app/types";
 
-/** used to for sorting frames in raster scan order */
-const gridCompareFn = (p1: GridPosition, p2: GridPosition): 0 | -1 | 1 => {
-  if (p1.row == p2.row) {
-    if (p1.col == p2.col) {
-      return 0;
-    }
-    return p1.col < p2.col ? -1 : 1;
-  }
-  return p1.row < p2.row ? -1 : 1;
-};
+// Shows x-y inputs for entering precise box coordinates. This is useful
+// for comparing results directly to other implementations of the algorithm.
+const DEBUG_XY = false;
 
 export default function GridOptionsComponent({
   gridOptions,
@@ -51,16 +39,22 @@ export default function GridOptionsComponent({
   wizardStep,
   setWizardStep,
   setFrameSpacingBox,
+  numSheets,
+  activeSheet,
+  setActiveSheet,
 }: {
   gridOptions: GridOptions;
   setGridOptions: Dispatch<SetStateAction<GridOptions>>;
   loading: boolean;
   frames: Frame[];
   setFrames: Dispatch<SetStateAction<Frame[]>>;
-  imageSize: Size;
+  imageSize: Size | null;
   wizardStep: WizardStep;
   setWizardStep: Dispatch<SetStateAction<WizardStep>>;
   setFrameSpacingBox: Dispatch<SetStateAction<Box | undefined>>;
+  numSheets: number;
+  activeSheet: number;
+  setActiveSheet: Dispatch<SetStateAction<number>>;
 }) {
   const [widthError, setWidthError] = useState<boolean | string>(false);
   const [heightError, setHeightError] = useState<boolean | string>(false);
@@ -78,6 +72,15 @@ export default function GridOptionsComponent({
       <Title order={4}>{title}</Title>
 
       {/* Grid props */}
+      {(numSheets > 1 && wizardStep == "free") && (
+        <NumberInput
+          value={activeSheet}
+          onChange={(v) => setActiveSheet(parseInt(v as string))}
+          label="Sheet"
+          min={1}
+          max={numSheets}
+        />
+      )}
       <Group>
         <NumberInput
           label="Width"
@@ -95,9 +98,14 @@ export default function GridOptionsComponent({
 
             // compute new frames
             const newFrames: Frame[] = frames.map((f) => {
-              return { ...f, data: null, width: newWidth, height: newHeight };
+              return {
+                ...f,
+                data: null,
+                width: newWidth,
+                height: newHeight,
+              };
             });
-            if (!framesInBounds(newFrames, imageSize)) {
+            if (imageSize !== null && !framesInBounds(newFrames, imageSize)) {
               setWidthError("frames exceed image bounds");
               return;
             }
@@ -136,9 +144,15 @@ export default function GridOptionsComponent({
 
             // compute new frames
             const newFrames: Frame[] = frames.map((f) => {
-              return { ...f, data: null, width: newWidth, height: newHeight };
+              return {
+                ...f,
+                data: null,
+                width: newWidth,
+                height: newHeight,
+              };
             });
-            if (!framesInBounds(newFrames, imageSize)) {
+
+            if (imageSize !== null && !framesInBounds(newFrames, imageSize)) {
               setHeightError("frames exceed image bounds");
               return;
             }
@@ -163,79 +177,81 @@ export default function GridOptionsComponent({
       </Group>
 
       {/* debug */}
-      <Group>
-        <NumberInput
-          label="X"
-          value={gridOptions.x}
-          min={1}
-          onChange={(value) => {
-            const newX = parseFloat(value as string);
+      {DEBUG_XY && (
+        <Group>
+          <NumberInput
+            label="X"
+            value={gridOptions.x}
+            min={1}
+            onChange={(value) => {
+              const newX = parseFloat(value as string);
 
-            // compute new frames
-            if (wizardStep == "firstFrame") {
-              const newFrames: Frame[] = [...frames];
-              frames[0].x = newX
-              setFrames(newFrames);
-            } else {
-              setFrameSpacingBox(b => {
-                if (b === undefined) return b;
-                return {
-                  ...b,
-                  width: newX - b.x,
-                }
-              })
-            }
+              // compute new frames
+              if (wizardStep == "firstFrame") {
+                const newFrames: Frame[] = [...frames];
+                frames[0].x = newX;
+                setFrames(newFrames);
+              } else {
+                setFrameSpacingBox((b) => {
+                  if (b === undefined) return b;
+                  return {
+                    ...b,
+                    width: newX - b.x,
+                  };
+                });
+              }
 
-            // update grid options and frames
-            setGridOptions({
-              ...gridOptions,
-              x: newX
-            });
-          }}
-          stepHoldDelay={200}
-          stepHoldInterval={1}
-          w={100}
-          error={widthError}
-          fixedDecimalScale={true}
-          decimalScale={2}
-        />
+              // update grid options and frames
+              setGridOptions({
+                ...gridOptions,
+                x: newX,
+              });
+            }}
+            stepHoldDelay={200}
+            stepHoldInterval={1}
+            w={100}
+            error={widthError}
+            fixedDecimalScale={true}
+            decimalScale={2}
+          />
 
-        <NumberInput
-          label="Y"
-          value={gridOptions.y}
-          min={1}
-          onChange={(value) => {
-            const newY = parseFloat(value as string);
+          <NumberInput
+            label="Y"
+            value={gridOptions.y}
+            min={1}
+            onChange={(value) => {
+              const newY = parseFloat(value as string);
 
-            // compute new frames
-            if (wizardStep == "firstFrame") {
-              const newFrames: Frame[] = [...frames];
-              frames[0].y = newY
-              setFrames(newFrames);
-            } else {
-              setFrameSpacingBox(b => {
-                if (b === undefined) return b;
-                return {
-                  ...b,
-                  height: newY - b.y,
-                }
-              })
-            }
+              // compute new frames
+              if (wizardStep == "firstFrame") {
+                const newFrames: Frame[] = [...frames];
+                frames[0].y = newY;
+                setFrames(newFrames);
+              } else {
+                setFrameSpacingBox((b) => {
+                  if (b === undefined) return b;
+                  return {
+                    ...b,
+                    height: newY - b.y,
+                  };
+                });
+              }
 
-            // update grid options and frames
-            setGridOptions({
-              ...gridOptions,
-              y: newY
-            });
-          }}
-          stepHoldDelay={100}
-          stepHoldInterval={1}
-          w={100}
-          error={heightError}
-          fixedDecimalScale={true}
-          decimalScale={2}
-        />
-      </Group>
+              // update grid options and frames
+              setGridOptions({
+                ...gridOptions,
+                y: newY,
+              });
+            }}
+            stepHoldDelay={100}
+            stepHoldInterval={1}
+            w={100}
+            error={heightError}
+            fixedDecimalScale={true}
+            decimalScale={2}
+          />
+        </Group>
+      )}
 
       <Stack mt="lg">
         <Switch
@@ -332,7 +348,7 @@ export default function GridOptionsComponent({
                 ),
                 labels: { cancel: "Cancel", confirm: "Submit" },
                 onConfirm: () => {
-                  setWizardStep("compute")
+                  setWizardStep("compute");
                 },
               });
             }}

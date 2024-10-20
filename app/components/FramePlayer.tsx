@@ -10,7 +10,13 @@ import {
   TextInput,
   Tooltip,
 } from "@mantine/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  MutableRefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   IconDeviceFloppy,
   IconPlayerPause,
@@ -19,7 +25,13 @@ import {
 
 import type { Frame } from "@/app/types";
 
-export default function FramePlayer({ frames }: { frames: Frame[] }) {
+export default function FramePlayer({
+  frames,
+  imageCanvasRef,
+}: {
+  frames: Frame[];
+  imageCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+}) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
   const [fps, setFps] = useState<number | string>(5);
@@ -31,35 +43,48 @@ export default function FramePlayer({ frames }: { frames: Frame[] }) {
   const frameDelay = (1 / parseFloat(fps as string)) * 1000;
 
   useEffect(() => {
-    if (frames.length == 0 || !frames[0].data || !canvasRef.current) return;
+    if (frames.length == 0 || !canvasRef.current) return;
     const canvas = canvasRef.current!;
-    canvas.width = frames[0].data.width;
-    canvas.height = frames[0].data.height;
-    const context = canvas.getContext("2d");
-    const frame = frames[0];
-    if (context && frame.data) context.putImageData(frame.data, 0, 0);
+    canvas.width = frames[0].width;
+    canvas.height = frames[0].height;
+    console.log(canvas.width, canvas.height);
   }, [frames]);
 
   const drawCurrentFrame = useCallback(
     (index: number) => {
-      const canvas = canvasRef.current!;
-      const context = canvas.getContext("2d");
-      const frame = frames[index];
-      if (context && frame.data) {
-        context.putImageData(frame.data, 0, 0);
+      if (
+        canvasRef.current === null ||
+        imageCanvasRef === null ||
+        imageCanvasRef.current == null
+      ) {
+        return;
       }
+
+      const drawCanvas = canvasRef.current;
+      const drawContext = drawCanvas.getContext("2d");
+      const imageCanvas = imageCanvasRef.current;
+      const imageContext = imageCanvas.getContext("2d");
+
+      if (drawContext === null || imageContext === null) return;
+
+      const frame = frames[index];
+      drawContext.putImageData(
+        imageContext.getImageData(frame.x, frame.y, frame.width, frame.height),
+        0,
+        0
+      );
     },
-    [frames]
+    [frames, imageCanvasRef]
   );
 
   const animate = () => {
-    console.log("hi");
     // drawCurrentFrame(frameIndex)
     setFrameIndex((i) => (i + 1) % frames.length);
-    console.log(frameIndex);
     animationId.current = window.setTimeout(animate, frameDelay);
   };
+
   useEffect(() => {
+    console.log(frameIndex);
     drawCurrentFrame(frameIndex);
   }, [frameIndex]);
 
@@ -68,7 +93,11 @@ export default function FramePlayer({ frames }: { frames: Frame[] }) {
       {frames.length > 0 && (
         <Stack>
           <canvas
-            style={{ border: "1px solid #ccc", width: "500px" }}
+            style={{
+              border: "1px solid #ccc",
+              maxWidth: "500px",
+              maxHeight: "500px",
+            }}
             ref={canvasRef}
           />
           <Group>
@@ -118,8 +147,13 @@ export default function FramePlayer({ frames }: { frames: Frame[] }) {
                 leftSection={<IconDeviceFloppy />}
                 onClick={async () => {
                   const canvas = canvasRef.current!;
-                  const context = canvas.getContext("2d");
-                  if (!context) return;
+                  const drawContext = canvas.getContext("2d");
+                  const imageCanvas = imageCanvasRef.current!;
+                  const imageContext = imageCanvas.getContext("2d");
+
+                  if (drawContext === null || imageContext === null) return;
+
+                  if (!drawContext) return;
 
                   const zip = new JSZip();
 
@@ -129,14 +163,18 @@ export default function FramePlayer({ frames }: { frames: Frame[] }) {
                       .padStart(4, "0")}.png`;
 
                     const frame = frames[i];
-                    if (!frame.data) {
-                      // TODO use mantine modal
-                      alert("TODO");
-                      return;
-                    }
 
                     // Draw current frame to canvas, convert to blob
-                    context.putImageData(frame.data, 0, 0);
+                    drawContext.putImageData(
+                      imageContext.getImageData(
+                        frame.x,
+                        frame.y,
+                        frame.width,
+                        frame.height
+                      ),
+                      0,
+                      0
+                    );
                     const dataURL = canvasRef.current!.toDataURL("image/png");
                     const blob = await (await fetch(dataURL)).blob();
 

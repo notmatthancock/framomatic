@@ -21,12 +21,12 @@ export type Size = {
 export type Box = SpatialPosition & GridPosition & Size;
 
 export type Frame = Box & {
-  // Cropped image data inside the respective box
-  data: ImageData | null;
   // Is the frame active?
   active: boolean;
   // Is the frame's movement locked?
   locked: boolean;
+  // The sheet to which the frame belongs
+  sheet: number;
 };
 
 export type GridOptions = {

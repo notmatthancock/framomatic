@@ -3,20 +3,23 @@ import { IconUpload, IconPhoto, IconX } from "@tabler/icons-react";
 import { Dropzone, IMAGE_MIME_TYPE } from "@mantine/dropzone";
 import { Dispatch, SetStateAction } from "react";
 
-export default function ImageLoader({ setImageUrl }: { setImageUrl: Dispatch<SetStateAction<string | undefined>> }) {
+export default function ImageLoader({
+  setImageUrls,
+}: {
+  setImageUrls: Dispatch<SetStateAction<string[] | undefined>>;
+}) {
   const theme = useMantineTheme();
 
   return (
     <>
       <Dropzone
-        onDrop={(files) => setImageUrl(URL.createObjectURL(files[0]))}
+        onDrop={(files) => {
+          setImageUrls(files.map(f => URL.createObjectURL(f)))
+        }}
         accept={IMAGE_MIME_TYPE}
-        maxFiles={1}
-        // my="xl"
+        // maxFiles={1}
       >
-        <Group
-          style={{ minHeight: rem(220), pointerEvents: "none" }}
-        >
+        <Group style={{ minHeight: rem(220), pointerEvents: "none" }}>
           <Dropzone.Accept>
             <IconUpload
               size="3.2rem"
