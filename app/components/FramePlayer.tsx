@@ -11,7 +11,9 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
+  Dispatch,
   MutableRefObject,
+  SetStateAction,
   useCallback,
   useEffect,
   useRef,
@@ -28,9 +30,13 @@ import type { Frame } from "@/app/types";
 export default function FramePlayer({
   frames,
   imageCanvasRef,
+  activeSheet,
+  setActiveSheet
 }: {
   frames: Frame[];
   imageCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+  activeSheet: number;
+  setActiveSheet: Dispatch<SetStateAction<number>>;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
@@ -47,7 +53,7 @@ export default function FramePlayer({
     const canvas = canvasRef.current!;
     canvas.width = frames[0].width;
     canvas.height = frames[0].height;
-    console.log(canvas.width, canvas.height);
+    drawCurrentFrame(frameIndex)
   }, [frames]);
 
   const drawCurrentFrame = useCallback(
@@ -84,9 +90,8 @@ export default function FramePlayer({
   };
 
   useEffect(() => {
-    console.log(frameIndex);
     drawCurrentFrame(frameIndex);
-  }, [frameIndex]);
+  }, [activeSheet]);
 
   return (
     <>
@@ -120,7 +125,16 @@ export default function FramePlayer({
               max={frames.length - 1}
               step={1}
               value={frameIndex}
-              onChange={setFrameIndex}
+              onChange={index => {
+                let prevIndex = index - 1
+                if (prevIndex < 0) prevIndex = frames.length - 1
+                setFrameIndex(index)
+                if (frames[index].sheet == frames[prevIndex].sheet) {
+                  drawCurrentFrame(index)
+                } else {
+                  setActiveSheet(frames[index].sheet)
+                }
+              } }
             />
             <Tooltip label="Frames per second">
               <NumberInput

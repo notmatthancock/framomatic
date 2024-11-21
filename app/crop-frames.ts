@@ -204,11 +204,13 @@ function cropFramesFromImage(
 cv["onRuntimeInitialized"] = () => {
   onmessage = (e) => {
     const {
+      sheet,
       imageData,
       firstFrame,
       frameSpacingBox,
       gridDimensions,
     }: {
+      sheet: number;
       imageData: ImageData;
       firstFrame: Frame;
       frameSpacingBox: Box;
@@ -217,6 +219,8 @@ cv["onRuntimeInitialized"] = () => {
     const imageMat = cv.matFromImageData(imageData);
     const frameSpacingHeight = frameSpacingBox.height - 2 * firstFrame.height;
     const frameSpacingWidth = frameSpacingBox.width - 2 * firstFrame.width;
+
+    console.log("sheet from worker", sheet)
 
     // TODO: loop over images (handle multiple sheets)
     cropFramesFromImage(

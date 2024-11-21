@@ -32,7 +32,6 @@ const DEBUG_XY = false;
 export default function GridOptionsComponent({
   gridOptions,
   setGridOptions,
-  loading,
   frames,
   setFrames,
   imageSize,
@@ -45,7 +44,6 @@ export default function GridOptionsComponent({
 }: {
   gridOptions: GridOptions;
   setGridOptions: Dispatch<SetStateAction<GridOptions>>;
-  loading: boolean;
   frames: Frame[];
   setFrames: Dispatch<SetStateAction<Frame[]>>;
   imageSize: Size | null;
@@ -68,14 +66,13 @@ export default function GridOptionsComponent({
 
   return (
     <Card withBorder radius="sm">
-      <LoadingOverlay visible={loading} />
       <Title order={4}>{title}</Title>
 
       {/* Grid props */}
-      {(numSheets > 1 && wizardStep == "free") && (
+      {(true || numSheets > 1 && wizardStep == "free") && (
         <NumberInput
-          value={activeSheet}
-          onChange={(v) => setActiveSheet(parseInt(v as string))}
+          value={activeSheet+1}
+          onChange={(v) => setActiveSheet(parseInt(v as string)-1)}
           label="Sheet"
           min={1}
           max={numSheets}

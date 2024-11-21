@@ -6,7 +6,7 @@ import { Dispatch, SetStateAction } from "react";
 export default function ImageLoader({
   setImageUrls,
 }: {
-  setImageUrls: Dispatch<SetStateAction<string[] | undefined>>;
+  setImageUrls: Dispatch<SetStateAction<string[]>>;
 }) {
   const theme = useMantineTheme();
 

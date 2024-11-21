@@ -12,15 +12,7 @@ import {
   Text,
 } from "@mantine/core";
 import { useDisclosure, useElementSize } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
-import {
-  Dispatch,
-  SetStateAction,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createRef, useEffect, useRef, useState } from "react";
 import { Rnd, DraggableData, ResizableDelta, Position } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { IconLock } from "@tabler/icons-react";
@@ -40,11 +32,11 @@ const defaultGridOptions: GridOptions = {
   y: 0,
 };
 
-const initialFrameSizeFraction = 0.1;
+const INIT_FRAME_SIZE_FRACTION = 0.1;
 
 const getInitialFrame = (imageSize: Size): Frame => {
-  const x = Math.floor(imageSize.width * initialFrameSizeFraction);
-  const y = Math.floor(imageSize.height * initialFrameSizeFraction);
+  const x = Math.floor(imageSize.width * INIT_FRAME_SIZE_FRACTION);
+  const y = Math.floor(imageSize.height * INIT_FRAME_SIZE_FRACTION);
   const size = Math.max(x, y);
   const firstFrame: Frame = {
     row: 0,
@@ -60,12 +52,14 @@ const getInitialFrame = (imageSize: Size): Frame => {
   return firstFrame;
 };
 
+
 export default function Home() {
   ///////////////////////////////////////////////////////////////////
   // State variables, refs, etc.
-  const [imageUrls, setImageUrls] = useState<string[]>();
+  const [imageUrls, setImageUrls] = useState<string[]>([] as string[]);
+  const numSheets = imageUrls.length;
   const [imageData, setImageData] = useState<ImageData>();
-  const [activeSheet, setActiveSheet] = useState(1);
+  const [activeSheet, setActiveSheet] = useState(0);
   const imageCanvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Worker>();
   const {
@@ -80,22 +74,26 @@ export default function Home() {
   const [gridOptions, setGridOptions] =
     useState<GridOptions>(defaultGridOptions);
   const [frames, setFrames] = useState<Frame[]>([]);
-  const [framesLoading, setFramesLoading] = useState(false);
   const [frameSpacingBox, setFrameSpacingBox] = useState<Box | undefined>();
   const [zoomScale, setZoomScale] = useState(1.0);
   const [wizardStep, setWizardStep] = useState<WizardStep>(null);
 
+  const imageRefs = useRef([])
+  imageRefs.current = imageUrls.map((url, i) => imageRefs.current[i] ?? createRef())
+
   ///////////////////////////////////////////////////////////////////
   // Hooks and what not
   useEffect(() => {
-    if (imageData === null || imageRef.current === null) {
+    if (imageData === null || imageRefs.current[0] === undefined) {
       return;
     }
-    // setFramesLoading(true);
+    // if (imageData === null || imageRef.current === null) {
+    //   return;
+    // }
     if (frames.length == 0) {
       const firstFrame = getInitialFrame({
-        width: imageRef.current.naturalWidth,
-        height: imageRef.current.naturalHeight,
+        width: imageRefs.current[0].naturalWidth,
+        height: imageRefs.current[0].naturalHeight,
       });
       setFrames([firstFrame]);
       setGridOptions({
@@ -117,12 +115,18 @@ export default function Home() {
       if ("frame" in e.data) {
         const frame: Frame = e.data.frame;
         setFrames((prevFrames) => [...prevFrames, frame]);
-        // setFramesLoading(false);
         if (
+          // Last frame for the current sheet
           frame.row == gridDimensions.nRows - 1 &&
           frame.col == gridDimensions.nCols - 1
         ) {
-          setWizardStep("free");
+          if (activeSheet == numSheets - 1) {
+            // If it's the last sheet, we are done
+            setWizardStep("free");
+          } else {
+            // Otherwise, increment the active sheet
+            setActiveSheet((s) => s + 1);
+          }
         }
       }
     };
@@ -130,16 +134,63 @@ export default function Home() {
     return () => {
       return workerRef.current!.terminate();
     };
-  }, []);
+  }, [gridDimensions.nRows, gridDimensions.nCols, numSheets]);
 
   useEffect(() => {
     if (workerRef.current !== undefined && wizardStep == "compute") {
+      const firstFrame = { ...frames[0], sheet: activeSheet };
       workerRef.current.postMessage({
+        sheet: activeSheet,
         imageData: imageData,
-        firstFrame: frames[0],
+        firstFrame: firstFrame,
         frameSpacingBox: frameSpacingBox,
         gridDimensions: gridDimensions,
       });
+    }
+  }, [wizardStep]);
+
+  useEffect(() => {
+    if (wizardStep == "firstFrame") {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        switch (e.key) {
+          case "ArrowUp":
+            setFrames((frames) => {
+              const newFrame = frames[0];
+              newFrame.y = Math.max(0, newFrame.y - 1);
+              return [newFrame];
+            });
+            break;
+          case "ArrowDown":
+            setFrames((frames) => {
+              const newFrame = frames[0];
+              newFrame.y = Math.min(
+                imageRef.current!.naturalHeight - newFrame.height,
+                newFrame.y + 1
+              );
+              return [newFrame];
+            });
+            break;
+          case "ArrowRight":
+            setFrames((frames) => {
+              const newFrame = frames[0];
+              newFrame.x = Math.min(
+                imageRef.current!.naturalWidth - newFrame.width,
+                newFrame.x + 1
+              );
+              return [newFrame];
+            });
+            break;
+          case "ArrowLeft":
+            setFrames((frames) => {
+              const newFrame = frames[0];
+              newFrame.x = Math.max(0, newFrame.x - 1);
+              return [newFrame];
+            });
+            break;
+        }
+      };
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
     }
   }, [wizardStep]);
 
@@ -208,7 +259,7 @@ export default function Home() {
   return (
     <>
       <Group align="start">
-        {imageUrls && (
+        {imageUrls.length > 0 && (
           <Modal
             opened={gridModalOpened}
             onClose={closeGridModal}
@@ -276,11 +327,10 @@ export default function Home() {
             </Stack>
           </Modal>
         )}
-        {imageUrls && (
+        {imageUrls.length > 0 && (
           <GridOptionsComponent
             gridOptions={gridOptions}
             setGridOptions={setGridOptions}
-            loading={framesLoading}
             frames={frames}
             setFrames={setFrames}
             imageSize={
@@ -296,10 +346,10 @@ export default function Home() {
             setFrameSpacingBox={setFrameSpacingBox}
             activeSheet={activeSheet}
             setActiveSheet={setActiveSheet}
-            numSheets={imageUrls.length}
+            numSheets={numSheets}
           />
         )}
-        {imageUrls ? (
+        {imageUrls.length > 0 ? (
           <>
             <Group align="start">
               <TransformWrapper
@@ -484,35 +534,36 @@ export default function Home() {
                       )}
                     {imageUrls.map((imageUrl, index) => {
                       return (
-                        activeSheet - 1 == index && (
-                          <Image
-                            key={index}
-                            ref={imageRef}
-                            style={{ border: "1px solid #ccc" }}
-                            radius="sm"
-                            alt="Main image to divide into animation frames"
-                            w={500}
-                            h="auto"
-                            src={imageUrl}
-                            onLoad={(e) => {
-                              if (
-                                index == 0 &&
-                                (gridDimensions.nRows == 0 ||
-                                  gridDimensions.nCols == 0)
-                              )
-                                openGridModal();
-                              const img: HTMLImageElement = e.currentTarget;
-                              const h = img.naturalHeight;
-                              const w = img.naturalWidth;
-                              const canvas = imageCanvasRef.current!;
-                              canvas.width = w;
-                              canvas.height = h;
-                              const context = canvas.getContext("2d")!;
-                              context.drawImage(img, 0, 0);
-                              setImageData(context.getImageData(0, 0, w, h));
-                            }}
-                          />
-                        )
+                        <Image
+                          key={index}
+                          ref={imageRefs.current[index]}
+                          style={{
+                            border: "1px solid #ccc",
+                            display: activeSheet == index ? "block" : "none",
+                          }}
+                          radius="sm"
+                          alt="Main image to divide into animation frames"
+                          w={500}
+                          h="auto"
+                          src={imageUrl}
+                          onLoad={(e) => {
+                            if (
+                              index == 0 &&
+                              (gridDimensions.nRows == 0 ||
+                                gridDimensions.nCols == 0)
+                            )
+                              openGridModal();
+                            // const img: HTMLImageElement = e.currentTarget;
+                            // const h = img.naturalHeight;
+                            // const w = img.naturalWidth;
+                            // const canvas = imageCanvasRef.current!;
+                            // canvas.width = w;
+                            // canvas.height = h;
+                            // const context = canvas.getContext("2d")!;
+                            // context.drawImage(img, 0, 0);
+                            // setImageData(context.getImageData(0, 0, w, h));
+                          }}
+                        />
                       );
                     })}
                   </MantineBox>
@@ -522,8 +573,13 @@ export default function Home() {
             <Group>
               {/* Hidden canvas used to extract image pixel data */}
               <canvas ref={imageCanvasRef} style={{ display: "none" }} />
-              {frames.length > 0 && (
-                <FramePlayer frames={frames} imageCanvasRef={imageCanvasRef} />
+              { frames.length > 0 && (
+                <FramePlayer
+                  frames={frames}
+                  imageCanvasRef={imageCanvasRef}
+                  activeSheet={activeSheet}
+                  setActiveSheet={setActiveSheet}
+                />
               )}
             </Group>
           </>
