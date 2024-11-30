@@ -40,5 +40,10 @@ export type GridOptions = {
   y: number;
 };
 
+export type WizardStep = "sheetsUpload" | "gridDims" | "firstFrame" | "frameSpacing" | "compute" | "free";
 
-export type WizardStep = null | "gridDims" | "firstFrame" | "frameSpacing" | "compute" | "free";
+export type FrameSelectorModalInfo = {
+  title: string;
+  description: string;
+  imageUrl: string | null;
+}

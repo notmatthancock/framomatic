@@ -2,11 +2,14 @@ import { Group, Text, rem, useMantineTheme } from "@mantine/core";
 import { IconUpload, IconPhoto, IconX } from "@tabler/icons-react";
 import { Dropzone, IMAGE_MIME_TYPE } from "@mantine/dropzone";
 import { Dispatch, SetStateAction } from "react";
+import { WizardStep } from "@/app/types";
 
-export default function ImageLoader({
+export default function ImagesLoader({
   setImageUrls,
+  setWizardStep,
 }: {
   setImageUrls: Dispatch<SetStateAction<string[]>>;
+  setWizardStep: Dispatch<SetStateAction<WizardStep>>;
 }) {
   const theme = useMantineTheme();
 
@@ -14,10 +17,10 @@ export default function ImageLoader({
     <>
       <Dropzone
         onDrop={(files) => {
-          setImageUrls(files.map(f => URL.createObjectURL(f)))
+          setImageUrls(files.map((f) => URL.createObjectURL(f)));
+          setWizardStep("gridDims")
         }}
         accept={IMAGE_MIME_TYPE}
-        // maxFiles={1}
       >
         <Group style={{ minHeight: rem(220), pointerEvents: "none" }}>
           <Dropzone.Accept>

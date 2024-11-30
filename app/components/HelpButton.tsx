@@ -1,15 +1,10 @@
-import { ActionIcon, Modal } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { ActionIcon } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 
-export default function HelpButton({ title, text }: { title: string; text: string }) {
-  const [opened, { open, close }] = useDisclosure(false);
+export default function HelpButton({openModal}: {openModal: () => void;}) {
   return (
     <>
-      <Modal opened={opened} onClose={close}>
-        {text}
-      </Modal>
-      <ActionIcon onClick={open} variant="default" size="sm">
+      <ActionIcon onClick={openModal} variant="default" size="sm">
         <IconInfoCircle />
       </ActionIcon>
     </>

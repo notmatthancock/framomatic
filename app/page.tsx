@@ -1,592 +1,101 @@
 "use client";
+import { modals } from "@mantine/modals";
+import { useState } from "react";
 
-import {
-  Box as MantineBox,
-  Button,
-  Group,
-  Image,
-  Modal,
-  NumberInput,
-  Stack,
-  Title,
-  Text,
-} from "@mantine/core";
-import { useDisclosure, useElementSize } from "@mantine/hooks";
-import { createRef, useEffect, useRef, useState } from "react";
-import { Rnd, DraggableData, ResizableDelta, Position } from "react-rnd";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { IconLock } from "@tabler/icons-react";
+import GridDimsSelector from "@/app/components/GridDimsSelector";
+import SheetsUpload from "@/app/components/SheetsUpload";
+import FrameSelector from "@/app/components/FrameSelector";
+import { getInitialFirstFrame } from "@/app/utils";
 
-import GridOptionsComponent from "@/app/components/GridOptionsComponent";
-import FramePlayer from "@/app/components/FramePlayer";
-import ImageLoader from "@/app/components/ImageLoader";
-import { Box, Frame, Grid, GridOptions, Size, WizardStep } from "@/app/types";
-
-const defaultGridOptions: GridOptions = {
-  frameWidth: -1,
-  frameHeight: -1,
-  frameColor: "#ff6666",
-  frameThickness: 1,
-  lockAspectRatio: false,
-  x: 0,
-  y: 0,
-};
-
-const INIT_FRAME_SIZE_FRACTION = 0.1;
-
-const getInitialFrame = (imageSize: Size): Frame => {
-  const x = Math.floor(imageSize.width * INIT_FRAME_SIZE_FRACTION);
-  const y = Math.floor(imageSize.height * INIT_FRAME_SIZE_FRACTION);
-  const size = Math.max(x, y);
-  const firstFrame: Frame = {
-    row: 0,
-    col: 0,
-    x: x,
-    y: y,
-    width: size,
-    height: size,
-    active: true,
-    locked: false,
-    sheet: 0,
-  };
-  return firstFrame;
-};
-
+import type { Frame, Grid, WizardStep } from "@/app/types";
 
 export default function Home() {
-  ///////////////////////////////////////////////////////////////////
-  // State variables, refs, etc.
-  const [imageUrls, setImageUrls] = useState<string[]>([] as string[]);
-  const numSheets = imageUrls.length;
-  const [imageData, setImageData] = useState<ImageData>();
-  const [activeSheet, setActiveSheet] = useState(0);
-  const imageCanvasRef = useRef<HTMLCanvasElement>(null);
-  const workerRef = useRef<Worker>();
-  const {
-    ref: imageRef,
-    width: imageElementWidth,
-    height: imageElementHeight,
-  } = useElementSize();
-  const [gridDimensions, setGridDimensions] = useState<Grid>({
-    nRows: 0,
-    nCols: 0,
-  });
-  const [gridOptions, setGridOptions] =
-    useState<GridOptions>(defaultGridOptions);
-  const [frames, setFrames] = useState<Frame[]>([]);
-  const [frameSpacingBox, setFrameSpacingBox] = useState<Box | undefined>();
-  const [zoomScale, setZoomScale] = useState(1.0);
-  const [wizardStep, setWizardStep] = useState<WizardStep>(null);
+  const [wizardStep, setWizardStep] = useState<WizardStep>("sheetsUpload");
 
-  const imageRefs = useRef([])
-  imageRefs.current = imageUrls.map((url, i) => imageRefs.current[i] ?? createRef())
-
-  ///////////////////////////////////////////////////////////////////
-  // Hooks and what not
-  useEffect(() => {
-    if (imageData === null || imageRefs.current[0] === undefined) {
-      return;
-    }
-    // if (imageData === null || imageRef.current === null) {
-    //   return;
-    // }
-    if (frames.length == 0) {
-      const firstFrame = getInitialFrame({
-        width: imageRefs.current[0].naturalWidth,
-        height: imageRefs.current[0].naturalHeight,
-      });
-      setFrames([firstFrame]);
-      setGridOptions({
-        ...gridOptions,
-        frameWidth: firstFrame.width,
-        frameHeight: firstFrame.height,
-      });
-      setWizardStep("gridDims");
-    }
-  }, [frames.length, gridOptions, imageData, imageRef]);
-
-  useEffect(() => {
-    // // Instantiate worker for doing frame extraction
-    workerRef.current = new Worker(
-      new URL("./crop-frames.ts", import.meta.url)
-    );
-    // // Handle messages from worker
-    workerRef.current.onmessage = (e) => {
-      if ("frame" in e.data) {
-        const frame: Frame = e.data.frame;
-        setFrames((prevFrames) => [...prevFrames, frame]);
-        if (
-          // Last frame for the current sheet
-          frame.row == gridDimensions.nRows - 1 &&
-          frame.col == gridDimensions.nCols - 1
-        ) {
-          if (activeSheet == numSheets - 1) {
-            // If it's the last sheet, we are done
-            setWizardStep("free");
-          } else {
-            // Otherwise, increment the active sheet
-            setActiveSheet((s) => s + 1);
-          }
-        }
-      }
-    };
-    // // Cleanup the worker
-    return () => {
-      return workerRef.current!.terminate();
-    };
-  }, [gridDimensions.nRows, gridDimensions.nCols, numSheets]);
-
-  useEffect(() => {
-    if (workerRef.current !== undefined && wizardStep == "compute") {
-      const firstFrame = { ...frames[0], sheet: activeSheet };
-      workerRef.current.postMessage({
-        sheet: activeSheet,
-        imageData: imageData,
-        firstFrame: firstFrame,
-        frameSpacingBox: frameSpacingBox,
-        gridDimensions: gridDimensions,
-      });
-    }
-  }, [wizardStep]);
-
-  useEffect(() => {
-    if (wizardStep == "firstFrame") {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        switch (e.key) {
-          case "ArrowUp":
-            setFrames((frames) => {
-              const newFrame = frames[0];
-              newFrame.y = Math.max(0, newFrame.y - 1);
-              return [newFrame];
-            });
-            break;
-          case "ArrowDown":
-            setFrames((frames) => {
-              const newFrame = frames[0];
-              newFrame.y = Math.min(
-                imageRef.current!.naturalHeight - newFrame.height,
-                newFrame.y + 1
-              );
-              return [newFrame];
-            });
-            break;
-          case "ArrowRight":
-            setFrames((frames) => {
-              const newFrame = frames[0];
-              newFrame.x = Math.min(
-                imageRef.current!.naturalWidth - newFrame.width,
-                newFrame.x + 1
-              );
-              return [newFrame];
-            });
-            break;
-          case "ArrowLeft":
-            setFrames((frames) => {
-              const newFrame = frames[0];
-              newFrame.x = Math.max(0, newFrame.x - 1);
-              return [newFrame];
-            });
-            break;
-        }
-      };
-      document.addEventListener("keydown", handleKeyDown);
-      return () => document.removeEventListener("keydown", handleKeyDown);
-    }
-  }, [wizardStep]);
-
-  const [gridModalOpened, { open: openGridModal, close: closeGridModal }] =
-    useDisclosure(false);
-
-  // Coordinate transform to "index space", the coordinate system
-  // of the full-res image
-  const toIndexSpace = (
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): Omit<Box, "row" | "col"> => {
-    const sourceWidth = imageElementWidth;
-    const sourceHeight = imageElementHeight;
-    const targetWidth = imageRef.current!.naturalWidth;
-    const targetHeight = imageRef.current!.naturalHeight;
-    const horizontalFactor = targetWidth / sourceWidth;
-    const verticalFactor = targetHeight / sourceHeight;
-
-    return {
-      x: x * horizontalFactor,
-      y: y * verticalFactor,
-      width: width * horizontalFactor,
-      height: height * verticalFactor,
-    };
-  };
-
-  // coordinate transform to "element space", the coordinate
-  // system of the (probably smaller) html image element
-  const toElementSpace = (
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): Omit<Box, "row" | "col"> => {
-    const sourceWidth = imageRef.current!.naturalWidth;
-    const sourceHeight = imageRef.current!.naturalHeight;
-    const targetWidth = imageElementWidth;
-    const targetHeight = imageElementHeight;
-    const horizontalFactor = targetWidth / sourceWidth / zoomScale;
-    const verticalFactor = targetHeight / sourceHeight / zoomScale;
-
-    return {
-      x: x * horizontalFactor,
-      y: y * verticalFactor,
-      width: width * horizontalFactor,
-      height: height * verticalFactor,
-    };
-  };
-
-  let frameSpacingElementSpace: Omit<Box, "row" | "col">;
-  if (wizardStep == "frameSpacing" && frameSpacingBox !== undefined) {
-    frameSpacingElementSpace = toElementSpace(
-      frameSpacingBox.x,
-      frameSpacingBox.y,
-      frameSpacingBox.width,
-      frameSpacingBox.height
-    );
-  } else {
-    // placeholder
-    frameSpacingElementSpace = { x: 0, y: 0, width: 1, height: 1 };
-  }
+  // Wizard Step States
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [gridDims, setGridDims] = useState<Grid>({ nRows: 0, nCols: 0 });
+  const [firstFrame, setFirstFrame] = useState<Frame | null>(null);
+  const [spacingFrame, setSpacingFrame] = useState<Frame | null>(null);
 
   return (
     <>
-      <Group align="start">
-        {imageUrls.length > 0 && (
-          <Modal
-            opened={gridModalOpened}
-            onClose={closeGridModal}
-            withCloseButton={false}
-            closeOnClickOutside={false}
-            closeOnEscape={false}
-          >
-            <Stack>
-              <Group>
-                <NumberInput
-                  label="Num. Rows"
-                  value={gridDimensions.nRows}
-                  onChange={(value) => {
-                    setGridDimensions({
-                      ...gridDimensions,
-                      nRows: parseInt(value as string),
-                    });
-                  }}
-                  min={1}
-                  error={
-                    gridDimensions.nRows < 1
-                      ? "Num. Rows must be greater than 0"
-                      : false
-                  }
-                  placeholder="Enter the number of rows in the frame grid"
-                  w={100}
-                />
-                <NumberInput
-                  label="Num. Cols"
-                  value={gridDimensions.nCols}
-                  onChange={(value) => {
-                    setGridDimensions({
-                      ...gridDimensions,
-                      nCols: parseInt(value as string),
-                    });
-                  }}
-                  min={1}
-                  error={
-                    gridDimensions.nCols < 1
-                      ? "Num. Cols must be greater than 0"
-                      : false
-                  }
-                  placeholder="Enter the number of rows in the frame grid"
-                  w={100}
-                />
-              </Group>
-
-              <Text>
-                Configure the number of rows and columns in a sheet of animation
-                frames.
-              </Text>
-
-              <Title order={5}>Sheet Preview</Title>
-              <Image alt="Preview" src={imageUrls[0]} />
-
-              <Button
-                onClick={() => {
-                  setWizardStep("firstFrame");
-                  closeGridModal();
-                }}
-                disabled={gridDimensions.nRows < 1 || gridDimensions.nCols < 1}
-              >
-                OK
-              </Button>
-            </Stack>
-          </Modal>
-        )}
-        {imageUrls.length > 0 && (
-          <GridOptionsComponent
-            gridOptions={gridOptions}
-            setGridOptions={setGridOptions}
-            frames={frames}
-            setFrames={setFrames}
-            imageSize={
-              imageRef.current === null
-                ? null
-                : {
-                    width: imageRef.current.naturalWidth,
-                    height: imageRef.current.naturalHeight,
-                  }
-            }
-            wizardStep={wizardStep}
-            setWizardStep={setWizardStep}
-            setFrameSpacingBox={setFrameSpacingBox}
-            activeSheet={activeSheet}
-            setActiveSheet={setActiveSheet}
-            numSheets={numSheets}
-          />
-        )}
-        {imageUrls.length > 0 ? (
-          <>
-            <Group align="start">
-              <TransformWrapper
-                panning={{ disabled: true }}
-                onZoomStop={(ref, event) => {
-                  console.log(ref.state);
-                }} //setZoomScale(ref.state.scale)}
-              >
-                <TransformComponent>
-                  <MantineBox
-                    w="fit-content"
-                    m="auto"
-                    pos="relative"
-                    mah="calc(100% - 80px - (1rem * 2))"
-                  >
-                    {wizardStep != "frameSpacing" &&
-                      imageRef.current !== null &&
-                      frames
-                        .filter((f) => f.sheet == activeSheet)
-                        .map((frame, i) => {
-                          const elementBox = toElementSpace(
-                            frame.x,
-                            frame.y,
-                            frame.width,
-                            frame.height
-                          );
-                          return (
-                            <Rnd
-                              key={i}
-                              bounds="parent"
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                border: "solid 1px blue",
-                                background: frame.locked
-                                  ? "rgba(255, 255, 255, 0.85)"
-                                  : "none",
-                                borderColor: gridOptions.frameColor,
-                                borderStyle: "solid",
-                                borderWidth: `${gridOptions.frameThickness}px`,
-                              }}
-                              size={{
-                                width: elementBox.width!,
-                                height: elementBox.height!,
-                              }}
-                              lockAspectRatio={gridOptions.lockAspectRatio}
-                              position={{ x: elementBox.x!, y: elementBox.y! }}
-                              disableDragging={frame.locked}
-                              onDrag={(e, dragData: DraggableData) => {
-                                // Reset the frames. The only frame that
-                                // is being changed is the one that is
-                                // dragged. For the dragged frame, we need
-                                // to remap the coordinate of the drag from
-                                // element space to index space.
-                                setFrames((prevFrames) => {
-                                  return prevFrames.map((f) => {
-                                    if (
-                                      f.row != frame.row ||
-                                      f.col != frame.col
-                                    ) {
-                                      return f;
-                                    }
-                                    const newCoords = toIndexSpace(
-                                      dragData.x,
-                                      dragData.y,
-                                      // Placeholders for width and height
-                                      -1,
-                                      -1
-                                    );
-                                    return {
-                                      ...f,
-                                      x: newCoords.x!,
-                                      y: newCoords.y!,
-                                    };
-                                  });
-                                });
-                              }}
-                              onResizeStop={(
-                                e,
-                                dir,
-                                ref,
-                                delta: ResizableDelta,
-                                pos: Position
-                              ) => {
-                                const width = parseInt(ref.style.width);
-                                const height = parseInt(ref.style.height);
-
-                                let deltaW: number,
-                                  deltaH: number,
-                                  deltaX: number,
-                                  deltaY: number;
-
-                                // Need to figure out the delta in position and size
-                                const r = toIndexSpace(
-                                  pos.x,
-                                  pos.y,
-                                  width,
-                                  height
-                                );
-                                // r.* are all defined because pos, width, and height are
-                                deltaW = r.width! - frame.width;
-                                deltaH = r.height! - frame.height;
-                                deltaX = r.x! - frame.x;
-                                deltaY = r.y! - frame.y;
-
-                                setFrames((prevFrames) => {
-                                  return prevFrames.map((f) => {
-                                    return {
-                                      ...f,
-                                      x: f.x + deltaX,
-                                      y: f.y + deltaY,
-                                      width: f.width + deltaW,
-                                      height: f.height + deltaH,
-                                    };
-                                  });
-                                });
-                                setGridOptions({
-                                  ...gridOptions,
-                                  frameWidth: r.width,
-                                  frameHeight: r.height,
-                                });
-                              }}
-                              enableResizing={
-                                !frame.locked &&
-                                (wizardStep == "firstFrame" ||
-                                  wizardStep == "free")
-                              }
-                            >
-                              {frame.locked && <IconLock />}
-                            </Rnd>
-                          );
-                        })}
-                    {wizardStep == "frameSpacing" &&
-                      frameSpacingBox !== undefined && (
-                        <Rnd
-                          key={frames.length}
-                          size={{
-                            width: frameSpacingElementSpace.width,
-                            height: frameSpacingElementSpace.height,
-                          }}
-                          position={{
-                            x: frameSpacingElementSpace.x,
-                            y: frameSpacingElementSpace.y,
-                          }}
-                          disableDragging={true}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            border: "solid 1px blue",
-                            background: "none",
-                            borderColor: gridOptions.frameColor,
-                            borderStyle: "solid",
-                            borderWidth: `${gridOptions.frameThickness}px`,
-                          }}
-                          enableResizing={{
-                            bottomRight: true,
-                            right: true,
-                            bottom: true,
-                          }}
-                          onResize={(
-                            e,
-                            dir,
-                            ref,
-                            delta: ResizableDelta,
-                            pos: Position
-                          ) => {
-                            const indexBox = toIndexSpace(
-                              -1,
-                              -1,
-                              parseFloat(ref.style.width),
-                              parseFloat(ref.style.height)
-                            );
-                            setFrameSpacingBox({
-                              ...frameSpacingBox,
-                              width: indexBox.width,
-                              height: indexBox.height,
-                            });
-                          }}
-                        />
-                      )}
-                    {imageUrls.map((imageUrl, index) => {
-                      return (
-                        <Image
-                          key={index}
-                          ref={imageRefs.current[index]}
-                          style={{
-                            border: "1px solid #ccc",
-                            display: activeSheet == index ? "block" : "none",
-                          }}
-                          radius="sm"
-                          alt="Main image to divide into animation frames"
-                          w={500}
-                          h="auto"
-                          src={imageUrl}
-                          onLoad={(e) => {
-                            if (
-                              index == 0 &&
-                              (gridDimensions.nRows == 0 ||
-                                gridDimensions.nCols == 0)
-                            )
-                              openGridModal();
-                            // const img: HTMLImageElement = e.currentTarget;
-                            // const h = img.naturalHeight;
-                            // const w = img.naturalWidth;
-                            // const canvas = imageCanvasRef.current!;
-                            // canvas.width = w;
-                            // canvas.height = h;
-                            // const context = canvas.getContext("2d")!;
-                            // context.drawImage(img, 0, 0);
-                            // setImageData(context.getImageData(0, 0, w, h));
-                          }}
-                        />
-                      );
-                    })}
-                  </MantineBox>
-                </TransformComponent>
-              </TransformWrapper>
-            </Group>
-            <Group>
-              {/* Hidden canvas used to extract image pixel data */}
-              <canvas ref={imageCanvasRef} style={{ display: "none" }} />
-              { frames.length > 0 && (
-                <FramePlayer
-                  frames={frames}
-                  imageCanvasRef={imageCanvasRef}
-                  activeSheet={activeSheet}
-                  setActiveSheet={setActiveSheet}
-                />
-              )}
-            </Group>
-          </>
-        ) : (
-          <ImageLoader setImageUrls={setImageUrls} />
-        )}
-      </Group>
+      {wizardStep == "sheetsUpload" && (
+        <SheetsUpload
+          setImageUrls={setImageUrls}
+          setWizardStep={setWizardStep}
+        />
+      )}
+      {wizardStep == "gridDims" && (
+        <GridDimsSelector
+          imageUrls={imageUrls}
+          gridDims={gridDims}
+          setGridDims={setGridDims}
+          setWizardStep={setWizardStep}
+          setImageUrls={setImageUrls}
+        />
+      )}
+      {wizardStep == "firstFrame" && (
+        <FrameSelector
+          wizardStep={wizardStep}
+          imageUrl={imageUrls[0]}
+          frame={firstFrame}
+          setFrame={setFirstFrame}
+          frameInitializer={getInitialFirstFrame}
+          onPrev={() => {
+            setFirstFrame(null);
+            setWizardStep("gridDims");
+          }}
+          onNext={() => {
+            modals.openConfirmModal({
+              title: "Confirm Initial Frame in Top Left Position",
+              children: (
+                <>Confirm to selection of initial frame in <b>top left</b> position.</>
+              ),
+              labels: { confirm: "Confirm", cancel: "Cancel" },
+              onConfirm: () => {
+                setWizardStep("frameSpacing");
+              },
+            });
+          }}
+          modalInfo={{
+            title: "Select Top Left Frame",
+            description:
+              "Selecting the top left frame establishes the frame size as well as starting position for find the remaining frames automatically.",
+            imageUrl: "first-frame.svg",
+          }}
+        />
+      )}
+      {wizardStep == "frameSpacing" && (
+        <FrameSelector
+          wizardStep={wizardStep}
+          imageUrl={imageUrls[0]}
+          frame={spacingFrame}
+          setFrame={setSpacingFrame}
+          frameInitializer={(size) => {
+            if (!firstFrame)
+              throw new Error(
+                "cannot initialize spacing frame with null first frame"
+              );
+            return {
+              ...firstFrame,
+              width: 2 * firstFrame.width,
+              height: 2 * firstFrame.height,
+            };
+          }}
+          onPrev={() => {
+            setSpacingFrame(null);
+            setWizardStep("firstFrame");
+          }}
+          onNext={() => {}}
+          modalInfo={{
+            title: "Select Top Left 2x2",
+            description:
+              "Select the top left 2x2. This establishes an estimate of the spacing between frames.",
+            imageUrl: "spacing-frame.svg",
+          }}
+        />
+      )}
     </>
   );
 }

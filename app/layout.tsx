@@ -1,5 +1,7 @@
 import "@mantine/core/styles.css";
+import '@mantine/carousel/styles.css';
 import "@mantine/dropzone/styles.css";
+
 import {
   AppShell,
   AppShellFooter,

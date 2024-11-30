@@ -1,5 +1,11 @@
 import type { CropOptions } from "crop-image-data";
-import type { Box, Frame, GridOptions, Size, SpatialPosition } from "@/app/types";
+import type {
+  Box,
+  Frame,
+  GridOptions,
+  Size,
+  SpatialPosition,
+} from "@/app/types";
 
 /** True if two line segments (a1, b1) and (a2, b2) overlap */
 const overlaps1d = (
@@ -91,25 +97,45 @@ export const framesOverlap = (frames: Frame[]): boolean => {
   }
   return false;
 };
+
+export function frameInBounds(frame: Frame, imageSize: Size): boolean {
+  return !(
+    frame.x < 0 ||
+    frame.x + frame.width > imageSize.width ||
+    frame.y < 0 ||
+    frame.y + frame.height > imageSize.height
+  );
+}
+
 export const framesInBounds = (frames: Frame[], imageSize: Size): boolean => {
   for (var i = 0; i < frames.length; i++) {
-    if (
-      frames[i].x < 0 ||
-      frames[i].x + frames[i].width > imageSize.width ||
-      frames[i].y < 0 ||
-      frames[i].y + frames[i].height > imageSize.height
-    ) {
-      return false;
-    }
+    if (!frameInBounds(frames[i], imageSize)) return false;
   }
   return true;
 };
-export const getLockAspectRatio = (
-  gridOptions: GridOptions
-): false | number => {
-  if (gridOptions.lockAspectRatio === false) {
-    return false;
-  } else {
-    return gridOptions.frameWidth / gridOptions.frameHeight;
-  }
-};
+
+const INIT_FRAME_SIZE_FRACTION = 0.1;
+
+export function getInitialFirstFrame(imageSize: Size): Frame {
+  const x = Math.floor(imageSize.width * INIT_FRAME_SIZE_FRACTION);
+  const y = Math.floor(imageSize.height * INIT_FRAME_SIZE_FRACTION);
+  const size = Math.max(x, y);
+  const firstFrame: Frame = {
+    row: 0,
+    col: 0,
+    x: x,
+    y: y,
+    width: size,
+    height: size,
+    active: true,
+    locked: false,
+    sheet: 0,
+  };
+  return firstFrame;
+}
+
+// camelCase to Title Case
+export function toTitle(text: string): string {
+  const result = text.replace(/([A-Z])/g, " $1");
+  return result.charAt(0).toUpperCase() + result.slice(1);
+}
