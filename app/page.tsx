@@ -50,7 +50,7 @@ export default function Home() {
             modals.openConfirmModal({
               title: "Confirm Initial Frame in Top Left Position",
               children: (
-                <>Confirm to selection of initial frame in <b>top left</b> position.</>
+                <>Confirm selection of initial frame in <b>top left</b> position.</>
               ),
               labels: { confirm: "Confirm", cancel: "Cancel" },
               onConfirm: () => {
@@ -87,7 +87,18 @@ export default function Home() {
             setSpacingFrame(null);
             setWizardStep("firstFrame");
           }}
-          onNext={() => {}}
+          onNext={() => {
+            modals.openConfirmModal({
+              title: "Confirm 2x2 Selection",
+              children: (
+                <>Confirm selection of top-left 2x2 frames. There should be <b>four frames</b> selected.</>
+              ),
+              labels: { confirm: "Confirm", cancel: "Cancel" },
+              onConfirm: () => {
+                setWizardStep("frameSpacing");
+              },
+            });
+          }}
           modalInfo={{
             title: "Select Top Left 2x2",
             description:

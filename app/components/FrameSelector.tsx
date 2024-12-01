@@ -297,7 +297,10 @@ export default function FrameSelector({
                 canvas.height = h;
                 const context = canvas.getContext("2d")!;
                 context.drawImage(img, 0, 0);
-                setFrame(frameInitializer({ width: w, height: h }));
+                // Initialize the frame if not null. The frame is not null
+                // if the user is navigating background after having already
+                // chosen a frame.
+                if (!frame) setFrame(frameInitializer({ width: w, height: h }));
               }}
             />
           </MantineBox>
