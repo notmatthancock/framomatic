@@ -139,3 +139,19 @@ export function toTitle(text: string): string {
   const result = text.replace(/([A-Z])/g, " $1");
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
+
+export function transformCoords(
+  frame: Frame,
+  sourceSize: Size,
+  targetSize: Size
+): Frame {
+  const horizontalFactor = targetSize.width / sourceSize.width; // zoomScale;
+  const verticalFactor = targetSize.height / sourceSize.height; // zoomScale;
+  return {
+    ...frame,
+    x: frame.x * horizontalFactor,
+    y: frame.y * verticalFactor,
+    width: frame.width * horizontalFactor,
+    height: frame.height * verticalFactor,
+  };
+}

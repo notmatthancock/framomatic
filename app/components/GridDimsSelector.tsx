@@ -7,11 +7,10 @@ import {
   Image,
   NumberInput,
   Stack,
-  Text,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
-import { IconArrowLeftBar, IconArrowRightBar } from "@tabler/icons-react";
 
+import SheetNavigation from "@/app/components/SheetNavigation"
 import { Grid, WizardStep } from "@/app/types";
 
 function GridDimsSelectorInputs({
@@ -58,34 +57,6 @@ function GridDimsSelectorInputs({
         />
       </Group>
     </>
-  );
-}
-
-function SheetNavigation({
-  activeSheet,
-  imageUrlsLength,
-  setActiveSheet,
-}: {
-  activeSheet: number;
-  imageUrlsLength: number;
-  setActiveSheet: Dispatch<SetStateAction<number>>;
-}) {
-  return (
-    <Group>
-      <Button
-        disabled={activeSheet == 0}
-        onClick={() => setActiveSheet((a) => a - 1)}
-      >
-        <IconArrowLeftBar />
-      </Button>
-      <Text>Sheet {activeSheet + 1}</Text>
-      <Button
-        disabled={activeSheet == imageUrlsLength - 1}
-        onClick={() => setActiveSheet((a) => a + 1)}
-      >
-        <IconArrowRightBar />
-      </Button>
-    </Group>
   );
 }
 

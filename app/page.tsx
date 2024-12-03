@@ -1,10 +1,11 @@
 "use client";
 import { modals } from "@mantine/modals";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import GridDimsSelector from "@/app/components/GridDimsSelector";
-import SheetsUpload from "@/app/components/SheetsUpload";
+import FrameDetector from "@/app/components/FrameDetector";
 import FrameSelector from "@/app/components/FrameSelector";
+import GridDimsSelector from "@/app/components/GridDimsSelector";
+import SheetsUpload from "@/app/components/SheetUpload";
 import { getInitialFirstFrame } from "@/app/utils";
 
 import type { Frame, Grid, WizardStep } from "@/app/types";
@@ -17,6 +18,12 @@ export default function Home() {
   const [gridDims, setGridDims] = useState<Grid>({ nRows: 0, nCols: 0 });
   const [firstFrame, setFirstFrame] = useState<Frame | null>(null);
   const [spacingFrame, setSpacingFrame] = useState<Frame | null>(null);
+
+  const workerRef = useRef<Worker>()
+  useEffect(() => {
+    workerRef.current = new Worker(new URL("@/app/crop-frames.ts", import.meta.url));
+    return () => workerRef.current!.terminate();
+  }, []);
 
   return (
     <>
@@ -50,7 +57,10 @@ export default function Home() {
             modals.openConfirmModal({
               title: "Confirm Initial Frame in Top Left Position",
               children: (
-                <>Confirm selection of initial frame in <b>top left</b> position.</>
+                <>
+                  Confirm selection of initial frame in <b>top left</b>{" "}
+                  position.
+                </>
               ),
               labels: { confirm: "Confirm", cancel: "Cancel" },
               onConfirm: () => {
@@ -91,11 +101,14 @@ export default function Home() {
             modals.openConfirmModal({
               title: "Confirm 2x2 Selection",
               children: (
-                <>Confirm selection of top-left 2x2 frames. There should be <b>four frames</b> selected.</>
+                <>
+                  Confirm selection of top-left 2x2 frames. There should be{" "}
+                  <b>four frames</b> selected.
+                </>
               ),
               labels: { confirm: "Confirm", cancel: "Cancel" },
               onConfirm: () => {
-                setWizardStep("frameSpacing");
+                setWizardStep("compute");
               },
             });
           }}
@@ -107,6 +120,19 @@ export default function Home() {
           }}
         />
       )}
+      {(wizardStep == "compute" || wizardStep == "free") &&
+        firstFrame &&
+        spacingFrame && (
+          <FrameDetector
+            wizardStep={wizardStep}
+            setWizardStep={setWizardStep}
+            worker={workerRef.current!}
+            imageUrls={imageUrls}
+            gridDims={gridDims}
+            firstFrame={firstFrame}
+            spacingFrame={spacingFrame}
+          />
+        )}
     </>
   );
 }

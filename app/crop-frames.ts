@@ -1,6 +1,8 @@
 import cv from "@techstark/opencv-js";
 
-import { Box, Frame, Grid } from "@/app/types";
+import type { Box, Frame, Grid, WorkerMessage } from "@/app/types";
+
+var templateImage: cv.Mat | null = null;
 
 /** Crop an image according to the bounds of Frame */
 function cropFromFrame(frame: Frame, image: cv.Mat): cv.Mat {
@@ -68,7 +70,12 @@ function locateNextFrame(
     );
   }
 
-  const adjustedFrame = adjustFramePosition(nextFrame, image, templateImage, searchSizeFraction);
+  const adjustedFrame = adjustFramePosition(
+    nextFrame,
+    image,
+    templateImage,
+    searchSizeFraction
+  );
 
   return adjustedFrame;
 }
@@ -111,25 +118,7 @@ function adjustFramePosition(
   // @ts-ignore
   let minMax = cv.minMaxLoc(result);
 
-  // debug: ignore this below
-  const newSearch = new cv.Mat()
-  cv.cvtColor(searchImage, newSearch, cv.COLOR_RGB2RGBA)
-  if (frame.row == 4 && frame.col == 3) {
-  postMessage({
-    searchImage: new ImageData(
-      new Uint8ClampedArray(newSearch.data),
-      newSearch.cols,
-      newSearch.rows
-    ),
-    maxLoc: minMax.maxLoc,
-  });
-}
-
-  return {...frame, 
-   x: minMax.maxLoc.x + xmin,
-   y: minMax.maxLoc.y + ymin,
-  }
-
+  return { ...frame, x: minMax.maxLoc.x + xmin, y: minMax.maxLoc.y + ymin };
 }
 
 function cropFramesFromImage(
@@ -141,25 +130,33 @@ function cropFramesFromImage(
   searchSizeFraction: number = 0.15,
   nLagFrames: number = 16,
   templateImage: cv.Mat | null = null
-) {
+): cv.Mat {
   if (nLagFrames <= 0) {
     throw new Error(`nLagFrames=${nLagFrames} must be greater than 0`);
   }
 
+  let currFrame = { ...firstFrame };
+
   if (templateImage === null) {
+    console.log("template image is null");
     templateImage = cropFromFrame(firstFrame, image);
   } else {
     // Only needed when handling sheets (images) beyond
-    adjustFramePosition(firstFrame, image, templateImage, searchSizeFraction);
+    currFrame = adjustFramePosition(
+      currFrame,
+      image,
+      templateImage,
+      3.0*searchSizeFraction
+    );
   }
 
-  let currFrame = firstFrame;
   let frames: Frame[] = [currFrame];
 
   while (
     !(currFrame.row === grid.nRows - 1 && currFrame.col === grid.nCols - 1)
   ) {
-    postMessage({ frame: currFrame });
+    const msg: WorkerMessage = { type: "newFrame", frame: currFrame };
+    postMessage(msg);
 
     const nextFrame = locateNextFrame(
       image,
@@ -198,7 +195,11 @@ function cropFramesFromImage(
     currFrame = nextFrame;
   }
 
-  postMessage({ frame: currFrame });
+  const msg: WorkerMessage = { type: "newFrame", frame: currFrame };
+  postMessage(msg);
+  const endMsg: WorkerMessage = { type: "sheetEnd" };
+  postMessage(endMsg);
+  return templateImage;
 }
 
 cv["onRuntimeInitialized"] = () => {
@@ -220,15 +221,16 @@ cv["onRuntimeInitialized"] = () => {
     const frameSpacingHeight = frameSpacingBox.height - 2 * firstFrame.height;
     const frameSpacingWidth = frameSpacingBox.width - 2 * firstFrame.width;
 
-    console.log("sheet from worker", sheet)
-
-    // TODO: loop over images (handle multiple sheets)
-    cropFramesFromImage(
+    templateImage = cropFramesFromImage(
       imageMat,
       firstFrame,
       frameSpacingWidth,
       frameSpacingHeight,
-      gridDimensions
+      gridDimensions,
+      0.25,
+      16,
+      templateImage
     );
+    console.log(templateImage);
   };
 };

@@ -26,13 +26,13 @@ import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 import type {
   Frame,
-  FrameSelectorModalInfo as SimpleModalInfo,
+  SimpleModalInfo,
   Size,
   WizardStep,
 } from "@/app/types";
 import FirstFrameProps from "@/app/components/FrameProps";
-import { frameInBounds, toTitle } from "@/app/utils";
-import HelpButton from "./HelpButton";
+import HelpButton from "@/app/components/HelpButton";
+import { frameInBounds, toTitle, transformCoords } from "@/app/utils";
 
 function openSimpleModal(modalInfo: SimpleModalInfo) {
   modals.open({
@@ -118,22 +118,6 @@ export default function FrameSelector({
     );
   }, [frame, framePreviewCanvasRef, imageDataCanvasRef]);
 
-  function transformCoords(
-    frame: Frame,
-    sourceSize: Size,
-    targetSize: Size
-  ): Frame {
-    const horizontalFactor = targetSize.width / sourceSize.width; // zoomScale;
-    const verticalFactor = targetSize.height / sourceSize.height; // zoomScale;
-    return {
-      ...frame,
-      x: frame.x * horizontalFactor,
-      y: frame.y * verticalFactor,
-      width: frame.width * horizontalFactor,
-      height: frame.height * verticalFactor,
-    };
-  }
-
   // coordinate transform to "element space", the coordinate
   // system of the (probably smaller) html image element
   const toElementSpace = (f: Frame): Frame => {
@@ -156,6 +140,8 @@ export default function FrameSelector({
     return transformCoords(f, sourceSize, imageNaturalSize);
   };
 
+  // elementBox is the current frame in the
+  // coordinate space of the html image element
   const elementBox = frame && imageNaturalSize ? toElementSpace(frame) : null;
 
   // Handle moving x position with keyboard arrows
@@ -164,25 +150,25 @@ export default function FrameSelector({
       if (!(frame && imageNaturalSize)) return;
       switch (e.key) {
         case "ArrowUp":
-          e.preventDefault()
+          e.preventDefault();
           setFrame({ ...frame, y: Math.max(0, frame.y - 1) });
           break;
         case "ArrowDown":
-          e.preventDefault()
+          e.preventDefault();
           setFrame({
             ...frame,
             y: Math.min(imageNaturalSize.height - frame.height, frame.y + 1),
           });
           break;
         case "ArrowRight":
-          e.preventDefault()
+          e.preventDefault();
           setFrame({
             ...frame,
             x: Math.min(imageNaturalSize.width - frame.width, frame.x + 1),
           });
           break;
         case "ArrowLeft":
-          e.preventDefault()
+          e.preventDefault;
           setFrame({ ...frame, x: Math.max(0, frame.x - 1) });
           break;
       }

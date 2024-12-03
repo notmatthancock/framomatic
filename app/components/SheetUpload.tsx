@@ -4,7 +4,7 @@ import { Dropzone, IMAGE_MIME_TYPE } from "@mantine/dropzone";
 import { Dispatch, SetStateAction } from "react";
 import { WizardStep } from "@/app/types";
 
-export default function ImagesLoader({
+export default function SheetUpload({
   setImageUrls,
   setWizardStep,
 }: {

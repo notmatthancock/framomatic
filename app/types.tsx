@@ -42,8 +42,14 @@ export type GridOptions = {
 
 export type WizardStep = "sheetsUpload" | "gridDims" | "firstFrame" | "frameSpacing" | "compute" | "free";
 
-export type FrameSelectorModalInfo = {
+export type SimpleModalInfo = {
   title: string;
   description: string;
   imageUrl: string | null;
+}
+
+export type WorkerMessage = {
+  type: "newFrame" | "sheetEnd";
+  // defined if message type is newFrame
+  frame?: Frame;
 }
