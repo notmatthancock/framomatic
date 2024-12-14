@@ -1,12 +1,29 @@
-import { Box as MantineBox, Group, Image, LoadingOverlay } from "@mantine/core";
+import {
+  Box as MantineBox,
+  Button,
+  Code,
+  Flex,
+  Group,
+  Image,
+  Text,
+} from "@mantine/core";
 import { useElementSize } from "@mantine/hooks";
-import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Rnd } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-import SheetNavigation from "@/app/components/SheetNavigation";
+import FramePlayer from "@/app/components/FramePlayer";
 import { transformCoords } from "@/app/utils";
 import type { Frame, Grid, Size, WizardStep, WorkerMessage } from "@/app/types";
+import { modals } from "@mantine/modals";
 
 export default function FrameDetector({
   wizardStep,
@@ -35,32 +52,66 @@ export default function FrameDetector({
   } = useElementSize();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const handleNewFrame = useCallback(
+    (frame?: Frame) => {
+      if (!frame) throw new Error("frame missing from worker message");
+      setFrames((prevFrames) => [...prevFrames, frame]);
+    },
+    [setFrames]
+  );
+
+  const handleSheetEnd = useCallback(() => {
+    if (activeSheet == imageUrls.length - 1) {
+      // totally done
+      setActiveSheet(0);
+      setWizardStep("free");
+      setComputing(false);
+    } else {
+      // NOTE: this is a bit rube-goldberg-ish -- incrementing
+      // the active sheet causes the image element to run onLoad
+      // which causes `detectFrames` to run for the new sheet.
+      setActiveSheet(activeSheet + 1);
+    }
+  }, [activeSheet, imageUrls, setActiveSheet, setComputing, setWizardStep]);
+
+  const handleError = useCallback(
+    (error?: string) => {
+      setWizardStep("free");
+      setComputing(false);
+      modals.open({
+        withCloseButton: false,
+        title: "Frame Detection Error",
+        children: (
+          <>
+            <Text>An unexpected error occurred when detecting frames</Text>
+            {error && <Code block={true}>{error}</Code>}
+            <Flex align="center" justify="flex-end" direction="row">
+              <Button onClick={() => modals.closeAll()}>OK</Button>
+            </Flex>
+          </>
+        ),
+      });
+    },
+    [setComputing, setWizardStep]
+  );
+
   const handleWorkerMessage = useCallback(
     (event: MessageEvent) => {
       const msg: WorkerMessage = event.data;
-      console.log(msg)
-      if (msg.type == "newFrame") {
-        if (!msg.frame) throw new Error("frame missing from worker message");
-        const frame: Frame = msg.frame;
-        setFrames((prevFrames) => [...prevFrames, frame]);
-      }
-      if (msg.type == "sheetEnd") {
-        if (activeSheet == imageUrls.length - 1) {
-          // totally done
-          console.log("done")
-          setWizardStep("free")
-          setComputing(false);
-          setActiveSheet(0);
-        } else {
-          // NOTE: this is a bit rube-goldberg-ish -- incrementing
-          // the active sheet causes the image element to run onLoad
-          // which causes `detectFrames` to run for the new sheet.
-          console.log("setting sheet to ", activeSheet + 1)
-          setActiveSheet(activeSheet + 1);
-        }
+
+      switch (msg.type) {
+        case "newFrame":
+          handleNewFrame(msg.frame);
+          break;
+        case "sheetEnd":
+          handleSheetEnd();
+          break;
+        case "error":
+          handleError(msg.error);
+          break;
       }
     },
-    [activeSheet, imageUrls.length]
+    [handleNewFrame, handleSheetEnd, handleError]
   );
 
   useEffect(() => {
@@ -71,7 +122,7 @@ export default function FrameDetector({
     worker.postMessage({
       sheet: activeSheet,
       imageData: imageData,
-      firstFrame: {...firstFrame, sheet: activeSheet},
+      firstFrame: { ...firstFrame, sheet: activeSheet },
       frameSpacingBox: spacingFrame,
       gridDimensions: gridDims,
     });
@@ -108,19 +159,8 @@ export default function FrameDetector({
     return transformCoords(f, imageNaturalSize, targetSize);
   };
 
-  console.log("frames", frames.length)
-
   return (
     <Group>
-      <MantineBox pos="relative">
-        {/* <LoadingOverlay visible={computing} /> */}
-        <SheetNavigation
-          activeSheet={activeSheet}
-          setActiveSheet={setActiveSheet}
-          imageUrlsLength={imageUrls.length}
-        />
-      </MantineBox>
-
       <TransformWrapper
         panning={{ disabled: true }}
         onZoomStop={(ref, event) => {
@@ -164,21 +204,20 @@ export default function FrameDetector({
               alt="Contact sheet with detected frames"
               w={500}
               onLoad={(e) => {
-                console.log("running onload", activeSheet)
-                if (wizardStep == "compute") {
-                  if (!canvasRef.current)
-                    throw new Error(
-                      "cannot extract image data with undefined canvas ref"
-                    );
+                if (!canvasRef.current)
+                  throw new Error(
+                    "cannot extract image data with undefined canvas ref"
+                  );
 
-                  const img: HTMLImageElement = e.currentTarget;
-                  const h = img.naturalHeight;
-                  const w = img.naturalWidth;
-                  const canvas = canvasRef.current;
-                  canvas.width = w;
-                  canvas.height = h;
-                  const context = canvas.getContext("2d")!;
-                  context.drawImage(img, 0, 0);
+                const img: HTMLImageElement = e.currentTarget;
+                const h = img.naturalHeight;
+                const w = img.naturalWidth;
+                const canvas = canvasRef.current;
+                canvas.width = w;
+                canvas.height = h;
+                const context = canvas.getContext("2d")!;
+                context.drawImage(img, 0, 0);
+                if (wizardStep == "compute") {
                   const imageData = context.getImageData(0, 0, w, h);
                   detectFrames(imageData);
                 }
@@ -187,6 +226,14 @@ export default function FrameDetector({
           </MantineBox>
         </TransformComponent>
       </TransformWrapper>
+      {wizardStep == "free" && (
+        <FramePlayer
+          frames={frames}
+          imageCanvasRef={canvasRef}
+          activeSheet={activeSheet}
+          setActiveSheet={setActiveSheet}
+        />
+      )}
       <canvas ref={canvasRef} style={{ display: "none" }} />
     </Group>
   );

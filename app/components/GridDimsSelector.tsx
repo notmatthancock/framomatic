@@ -82,7 +82,7 @@ export default function GridDimsSelector({
           <SheetNavigation
             activeSheet={activeSheet}
             setActiveSheet={setActiveSheet}
-            imageUrlsLength={imageUrls.length}
+            numSheets={imageUrls.length}
           />
           <GridDimsSelectorInputs
             gridDims={gridDims}

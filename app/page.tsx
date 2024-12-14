@@ -1,6 +1,6 @@
 "use client";
 import { modals } from "@mantine/modals";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import FrameDetector from "@/app/components/FrameDetector";
 import FrameSelector from "@/app/components/FrameSelector";

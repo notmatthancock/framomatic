@@ -49,7 +49,8 @@ export type SimpleModalInfo = {
 }
 
 export type WorkerMessage = {
-  type: "newFrame" | "sheetEnd";
+  type: "newFrame" | "sheetEnd" | "error";
   // defined if message type is newFrame
   frame?: Frame;
+  error?: string;
 }

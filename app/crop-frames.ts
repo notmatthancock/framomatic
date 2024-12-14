@@ -127,7 +127,7 @@ function cropFramesFromImage(
   frameSpacingWidth: number,
   frameSpacingHeight: number,
   grid: Grid,
-  searchSizeFraction: number = 0.15,
+  searchSizeFraction: number = 0.25,
   nLagFrames: number = 16,
   templateImage: cv.Mat | null = null
 ): cv.Mat {
@@ -146,7 +146,10 @@ function cropFramesFromImage(
       currFrame,
       image,
       templateImage,
-      3.0*searchSizeFraction
+      // The initial frame adjustment should use a larger search
+      // space to account for the fact that there could be movement
+      // in the overall grid position between frames.
+      1.5*searchSizeFraction
     );
   }
 
@@ -221,16 +224,20 @@ cv["onRuntimeInitialized"] = () => {
     const frameSpacingHeight = frameSpacingBox.height - 2 * firstFrame.height;
     const frameSpacingWidth = frameSpacingBox.width - 2 * firstFrame.width;
 
-    templateImage = cropFramesFromImage(
-      imageMat,
-      firstFrame,
-      frameSpacingWidth,
-      frameSpacingHeight,
-      gridDimensions,
-      0.25,
-      16,
-      templateImage
-    );
-    console.log(templateImage);
+    try {
+      templateImage = cropFramesFromImage(
+        imageMat,
+        firstFrame,
+        frameSpacingWidth,
+        frameSpacingHeight,
+        gridDimensions,
+        0.25,
+        16,
+        templateImage
+      );
+    } catch (err: any) {
+      const errMsg: WorkerMessage = {type: "error", error: err.stack}
+      postMessage(errMsg)
+    }
   };
 };

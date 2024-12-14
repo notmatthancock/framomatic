@@ -4,12 +4,12 @@ import { IconArrowLeftBar, IconArrowRightBar } from "@tabler/icons-react";
 
 export default function SheetNavigation({
   activeSheet,
-  imageUrlsLength,
   setActiveSheet,
+  numSheets,
 }: {
   activeSheet: number;
-  imageUrlsLength: number;
   setActiveSheet: Dispatch<SetStateAction<number>>;
+  numSheets: number;
 }) {
   return (
     <Group>
@@ -21,7 +21,7 @@ export default function SheetNavigation({
       </Button>
       <Text>Sheet {activeSheet + 1}</Text>
       <Button
-        disabled={activeSheet == imageUrlsLength - 1}
+        disabled={activeSheet == numSheets - 1}
         onClick={() => setActiveSheet((a) => a + 1)}
       >
         <IconArrowRightBar />
