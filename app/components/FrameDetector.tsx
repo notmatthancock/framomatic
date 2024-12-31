@@ -1,19 +1,22 @@
 import {
   Box as MantineBox,
   Button,
+  Card,
   Code,
   Flex,
   Group,
   Image,
+  Stack,
   Text,
+  Progress,
 } from "@mantine/core";
-import { useElementSize } from "@mantine/hooks";
+import { modals } from "@mantine/modals";
 import {
   Dispatch,
   SetStateAction,
   useCallback,
   useEffect,
-  useMemo,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -21,9 +24,10 @@ import { Rnd } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 import FramePlayer from "@/app/components/FramePlayer";
+import SheetNavigation from "@/app/components/SheetNavigation";
+import WizardNavigation from "@/app/components/WizardNavigation";
 import { transformCoords } from "@/app/utils";
 import type { Frame, Grid, Size, WizardStep, WorkerMessage } from "@/app/types";
-import { modals } from "@mantine/modals";
 
 export default function FrameDetector({
   wizardStep,
@@ -45,12 +49,23 @@ export default function FrameDetector({
   const [activeSheet, setActiveSheet] = useState(0);
   const [frames, setFrames] = useState<Frame[]>([]);
   const [computing, setComputing] = useState(true);
-  const {
-    ref: imageRef,
-    width: imageElementWidth,
-    height: imageElementHeight,
-  } = useElementSize();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const imagesLoadedCounter = useRef(0);
+  const imageRefs = useRef<(HTMLImageElement | null)[]>([]);
+  const imageData = useRef<ImageData[]>([]);
+  const [activeImageSize, setActiveImageSize] = useState<Size>();
+
+  const detectFrames = useCallback(
+    (sheet: number) => {
+      worker.postMessage({
+        imageData: imageData.current[sheet],
+        firstFrame: { ...firstFrame, sheet: sheet },
+        frameSpacingBox: spacingFrame,
+        gridDimensions: gridDims,
+      });
+    },
+    [firstFrame, gridDims, spacingFrame, worker]
+  );
 
   const handleNewFrame = useCallback(
     (frame?: Frame) => {
@@ -64,19 +79,16 @@ export default function FrameDetector({
     if (activeSheet == imageUrls.length - 1) {
       // totally done
       setActiveSheet(0);
-      setWizardStep("free");
       setComputing(false);
     } else {
-      // NOTE: this is a bit rube-goldberg-ish -- incrementing
-      // the active sheet causes the image element to run onLoad
-      // which causes `detectFrames` to run for the new sheet.
-      setActiveSheet(activeSheet + 1);
+      const nextSheet = activeSheet + 1;
+      setActiveSheet(nextSheet);
+      detectFrames(nextSheet);
     }
-  }, [activeSheet, imageUrls, setActiveSheet, setComputing, setWizardStep]);
+  }, [activeSheet, detectFrames, imageUrls, setActiveSheet, setComputing]);
 
   const handleError = useCallback(
     (error?: string) => {
-      setWizardStep("free");
       setComputing(false);
       modals.open({
         withCloseButton: false,
@@ -92,7 +104,7 @@ export default function FrameDetector({
         ),
       });
     },
-    [setComputing, setWizardStep]
+    [setComputing]
   );
 
   const handleWorkerMessage = useCallback(
@@ -118,123 +130,151 @@ export default function FrameDetector({
     worker.onmessage = handleWorkerMessage;
   }, [handleWorkerMessage, worker]);
 
-  const detectFrames = (imageData: ImageData) => {
-    worker.postMessage({
-      sheet: activeSheet,
-      imageData: imageData,
-      firstFrame: { ...firstFrame, sheet: activeSheet },
-      frameSpacingBox: spacingFrame,
-      gridDimensions: gridDims,
-    });
-  };
-
-  const imageNaturalSize = useMemo<Size | null>(() => {
-    return imageRef.current
-      ? {
-          width: imageRef.current!.naturalWidth,
-          height: imageRef.current!.naturalHeight,
-        }
-      : null;
-  }, [imageRef, imageRef.current]);
-
-  // Coordinate transform to "index space", the coordinate system
-  // of the full-res image
-  const toIndexSpace = (f: Frame): Frame => {
-    if (imageNaturalSize === null)
-      throw new Error(
-        "Cannot transform coordinates to index space because iamge size is null"
-      );
-    const sourceSize = { width: imageElementWidth, height: imageElementHeight };
-    return transformCoords(f, sourceSize, imageNaturalSize);
-  };
+  useLayoutEffect(() => {
+    const ref = imageRefs.current[activeSheet];
+    if (ref) {
+      setActiveImageSize({
+        width: ref.getBoundingClientRect().width,
+        height: ref.getBoundingClientRect().height,
+      });
+    }
+  }, [activeSheet]);
 
   // coordinate transform to "element space", the coordinate
   // system of the (probably smaller) html image element
   const toElementSpace = (f: Frame): Frame => {
-    if (imageNaturalSize === null)
+    if (!activeImageSize)
       throw new Error(
-        "Cannot transform coordinates to element space because image size is null"
+        "Cannot transform coordinates to element space because active image size is null"
       );
-    const targetSize = { width: imageElementWidth, height: imageElementHeight };
-    return transformCoords(f, imageNaturalSize, targetSize);
+    const sourceSize = {
+      width: imageData.current[activeSheet].width,
+      height: imageData.current[activeSheet].height,
+    };
+    return transformCoords(f, sourceSize, activeImageSize);
   };
 
   return (
-    <Group>
-      <TransformWrapper
-        panning={{ disabled: true }}
-        onZoomStop={(ref, event) => {
-          // TODO
-          console.log(ref.state);
+    <Group align="start">
+      <WizardNavigation
+        wizardStep={wizardStep}
+        onPrev={() => {
+          setFrames([]);
+          setWizardStep("frameSpacing");
         }}
       >
-        <TransformComponent>
-          <MantineBox
-            w="fit-content"
-            m="auto"
-            pos="relative"
-            mah="calc(100% - 80px - (1rem * 2))"
-          >
-            {frames
-              .filter((f) => f.sheet == activeSheet)
-              .map((frame, i) => {
-                const elementFrame = toElementSpace(frame);
-                return (
-                  <Rnd
-                    key={i}
-                    bounds="parent"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      border: "solid 1px red",
-                    }}
-                    size={{
-                      width: elementFrame.width,
-                      height: elementFrame.height,
-                    }}
-                    position={{ x: elementFrame.x, y: elementFrame.y }}
-                    disableDragging={frame.locked}
-                  />
-                );
-              })}
-            <Image
-              ref={imageRef}
-              src={imageUrls[activeSheet]}
-              alt="Contact sheet with detected frames"
-              w={500}
-              onLoad={(e) => {
-                if (!canvasRef.current)
-                  throw new Error(
-                    "cannot extract image data with undefined canvas ref"
-                  );
-
-                const img: HTMLImageElement = e.currentTarget;
-                const h = img.naturalHeight;
-                const w = img.naturalWidth;
-                const canvas = canvasRef.current;
-                canvas.width = w;
-                canvas.height = h;
-                const context = canvas.getContext("2d")!;
-                context.drawImage(img, 0, 0);
-                if (wizardStep == "compute") {
-                  const imageData = context.getImageData(0, 0, w, h);
-                  detectFrames(imageData);
-                }
-              }}
+        <Stack>
+          {computing && (
+            <Progress
+              value={
+                (frames.length /
+                  (gridDims.nRows * gridDims.nCols * imageUrls.length)) *
+                100
+              }
+              striped
+              animated
             />
-          </MantineBox>
-        </TransformComponent>
-      </TransformWrapper>
-      {wizardStep == "free" && (
+          )}
+          <SheetNavigation
+            activeSheet={activeSheet}
+            setActiveSheet={setActiveSheet}
+            numSheets={imageUrls.length}
+          />
+        </Stack>
+      </WizardNavigation>
+      <Card withBorder>
+        <TransformWrapper
+          panning={{ disabled: true }}
+          onZoomStop={(ref, event) => {
+            // TODO
+            console.log(ref.state);
+          }}
+        >
+          <TransformComponent>
+            <MantineBox
+              w="fit-content"
+              m="auto"
+              pos="relative"
+              mah="calc(100% - 80px - (1rem * 2))"
+            >
+              {imageUrls.map((url, index) => (
+                <Image
+                  w={500}
+                  key={index}
+                  src={url}
+                  // ref={(el) => {
+                  //   imageRefs.current[index] = el;
+                  // }}
+                  alt={`Contact Sheet ${index}`}
+                  style={{
+                    display: index == activeSheet ? "block" : "none",
+                  }}
+                  onLoad={async (event) => {
+                    const imageElement = event.currentTarget;
+                    imageRefs.current[index] = imageElement;
+                    const bitmap = await createImageBitmap(imageElement);
+                    const canvas = new OffscreenCanvas(
+                      bitmap.width,
+                      bitmap.height
+                    );
+                    const context = canvas.getContext("2d")!;
+                    context.drawImage(bitmap, 0, 0);
+                    imageData.current[index] = context.getImageData(
+                      0,
+                      0,
+                      bitmap.width,
+                      bitmap.height
+                    );
+                    imagesLoadedCounter.current++;
+                    if (index == activeSheet) {
+                      const rect = imageElement.getBoundingClientRect();
+                      setActiveImageSize({
+                        width: rect.width,
+                        height: rect.height,
+                      });
+                    }
+                    if (imagesLoadedCounter.current == imageUrls.length) {
+                      detectFrames(0);
+                    }
+                  }}
+                />
+              ))}
+              {frames
+                .filter((f) => f.sheet == activeSheet)
+                .map((frame, i) => {
+                  const elementFrame = toElementSpace(frame);
+                  return (
+                    <Rnd
+                      key={i}
+                      bounds="parent"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        border: "solid 1px red",
+                      }}
+                      size={{
+                        width: elementFrame.width,
+                        height: elementFrame.height,
+                      }}
+                      position={{ x: elementFrame.x, y: elementFrame.y }}
+                      disableDragging={frame.locked}
+                    />
+                  );
+                })}
+            </MantineBox>
+          </TransformComponent>
+        </TransformWrapper>
+      </Card>
+      {!computing && (
         <FramePlayer
           frames={frames}
-          imageCanvasRef={canvasRef}
+          imageData={imageData}
+          // imageCanvasRef={canvasRef}
           activeSheet={activeSheet}
           setActiveSheet={setActiveSheet}
         />
       )}
-      <canvas ref={canvasRef} style={{ display: "none" }} />
     </Group>
   );
 }

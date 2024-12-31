@@ -18,7 +18,7 @@ export default function SheetUpload({
       <Dropzone
         onDrop={(files) => {
           setImageUrls(files.map((f) => URL.createObjectURL(f)));
-          setWizardStep("gridDims")
+          setWizardStep("gridDimensions")
         }}
         accept={IMAGE_MIME_TYPE}
       >

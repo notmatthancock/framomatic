@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import FrameDetector from "@/app/components/FrameDetector";
 import FrameSelector from "@/app/components/FrameSelector";
-import GridDimsSelector from "@/app/components/GridDimsSelector";
+import GridDimensionsSelector from "@/app/components/GridDimensionsSelector";
 import SheetsUpload from "@/app/components/SheetUpload";
 import { getInitialFirstFrame } from "@/app/utils";
 
@@ -19,9 +19,11 @@ export default function Home() {
   const [firstFrame, setFirstFrame] = useState<Frame | null>(null);
   const [spacingFrame, setSpacingFrame] = useState<Frame | null>(null);
 
-  const workerRef = useRef<Worker>()
+  const workerRef = useRef<Worker>();
   useEffect(() => {
-    workerRef.current = new Worker(new URL("@/app/crop-frames.ts", import.meta.url));
+    workerRef.current = new Worker(
+      new URL("@/app/crop-frames.ts", import.meta.url)
+    );
     return () => workerRef.current!.terminate();
   }, []);
 
@@ -33,8 +35,8 @@ export default function Home() {
           setWizardStep={setWizardStep}
         />
       )}
-      {wizardStep == "gridDims" && (
-        <GridDimsSelector
+      {wizardStep == "gridDimensions" && (
+        <GridDimensionsSelector
           imageUrls={imageUrls}
           gridDims={gridDims}
           setGridDims={setGridDims}
@@ -51,7 +53,7 @@ export default function Home() {
           frameInitializer={getInitialFirstFrame}
           onPrev={() => {
             setFirstFrame(null);
-            setWizardStep("gridDims");
+            setWizardStep("gridDimensions");
           }}
           onNext={() => {
             modals.openConfirmModal({
@@ -108,7 +110,7 @@ export default function Home() {
               ),
               labels: { confirm: "Confirm", cancel: "Cancel" },
               onConfirm: () => {
-                setWizardStep("compute");
+                setWizardStep("frameDetection");
               },
             });
           }}
@@ -120,19 +122,17 @@ export default function Home() {
           }}
         />
       )}
-      {(wizardStep == "compute" || wizardStep == "free") &&
-        firstFrame &&
-        spacingFrame && (
-          <FrameDetector
-            wizardStep={wizardStep}
-            setWizardStep={setWizardStep}
-            worker={workerRef.current!}
-            imageUrls={imageUrls}
-            gridDims={gridDims}
-            firstFrame={firstFrame}
-            spacingFrame={spacingFrame}
-          />
-        )}
+      {wizardStep == "frameDetection" && firstFrame && spacingFrame && (
+        <FrameDetector
+          wizardStep={wizardStep}
+          setWizardStep={setWizardStep}
+          worker={workerRef.current!}
+          imageUrls={imageUrls}
+          gridDims={gridDims}
+          firstFrame={firstFrame}
+          spacingFrame={spacingFrame}
+        />
+      )}
     </>
   );
 }

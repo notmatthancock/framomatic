@@ -12,7 +12,7 @@ import {
 } from "@mantine/core";
 import {
   Dispatch,
-  MutableRefObject,
+  RefObject,
   SetStateAction,
   useCallback,
   useEffect,
@@ -25,60 +25,66 @@ import {
   IconPlayerPlay,
 } from "@tabler/icons-react";
 
-import SheetNavigation from "@/app/components/SheetNavigation";
 import type { Frame } from "@/app/types";
 
 export default function FramePlayer({
   frames,
-  imageCanvasRef,
+  imageData,
   activeSheet,
   setActiveSheet,
 }: {
   frames: Frame[];
-  imageCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+  imageData: RefObject<ImageData[]>;
   activeSheet: number;
   setActiveSheet: Dispatch<SetStateAction<number>>;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
+  // current frame being displayed in the frame player
   const [frameIndex, setFrameIndex] = useState(
     frames.findIndex((f) => f.sheet == activeSheet)
   );
+  // frames per second for UI-facing animation
   const [fps, setFps] = useState<number | string>(5);
+  // prefix of the individual frames
   const [downloadPrefix, setDownloadPrefix] = useState("frame");
   const [isZipping, setIsZipping] = useState(false);
-  const zipFile = useRef<JSZip>();
   const animationId = useRef<number | null>(null);
+  // download ref is a ref to a hyperlink element so we can
+  // simulate clicking the button to trigger download of zipped frames
   const downloadRef = useRef<HTMLAnchorElement>(null);
+  // canvas ref is the UI-facing canvas where animation frames are drawn
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const numSheets = new Set(frames.map((f) => f.sheet)).size;
+  // an offscreen canvas to hold and extract the image data for the active sheet
+  const offscreenCanvas = useRef<OffscreenCanvas | null>(
+    imageData.current
+      ? new OffscreenCanvas(
+          imageData.current[activeSheet].width,
+          imageData.current[activeSheet].height
+        )
+      : null
+  );
+
+  if (offscreenCanvas.current) {
+    const context = offscreenCanvas.current.getContext("2d")!;
+    context.putImageData(imageData.current![activeSheet], 0, 0);
+  }
 
   const drawCurrentFrame = useCallback(
     (index: number) => {
-      if (
-        canvasRef.current === null ||
-        imageCanvasRef === null ||
-        imageCanvasRef.current == null
-      ) {
-        return;
-      }
+      if (!canvasRef.current || !offscreenCanvas.current) return;
 
       const drawCanvas = canvasRef.current;
       const drawContext = drawCanvas.getContext("2d");
-      const imageCanvas = imageCanvasRef.current;
-      const imageContext = imageCanvas.getContext("2d");
 
-      if (drawContext === null || imageContext === null) return;
+      if (!drawContext) return;
 
       const frame = frames[index];
-      const imageData = imageContext.getImageData(
-        frame.x,
-        frame.y,
-        frame.width,
-        frame.height
-      );
-      drawContext.putImageData(imageData, 0, 0);
+      const frameData = offscreenCanvas.current
+        .getContext("2d")!
+        .getImageData(frame.x, frame.y, frame.width, frame.height);
+      drawContext.putImageData(frameData, 0, 0);
     },
-    [canvasRef, frames, imageCanvasRef]
+    [canvasRef, frames]
   );
 
   const frameDelay = (1 / parseFloat(fps as string)) * 1000;
@@ -89,74 +95,74 @@ export default function FramePlayer({
   };
 
   useEffect(() => {
+    if (!canvasRef.current) return;
     // Set width/height of frame player canvas
-    canvasRef.current!.width = frames[frameIndex].width;
-    canvasRef.current!.height = frames[frameIndex].height;
+    canvasRef.current.width = frames[frameIndex].width;
+    canvasRef.current.height = frames[frameIndex].height;
     setActiveSheet(frames[frameIndex].sheet);
     drawCurrentFrame(frameIndex);
   }, [drawCurrentFrame, frameIndex, frames, setActiveSheet]);
 
-  const zipFramesForActiveSheet = async () => {
-    if (!zipFile.current) throw new Error("error occurred zipping frames");
+  const zipFrames = async () => {
+    setIsZipping(true);
+    const jsZip = new JSZip();
+    const padLength = Math.ceil(Math.log10(frames.length)) + 1;
 
-    const canvas = canvasRef.current!;
-    const drawContext = canvas.getContext("2d");
-    const imageCanvas = imageCanvasRef.current!;
-    const imageContext = imageCanvas.getContext("2d");
+    // sheet canvas is the main source to pull image data for each frame
+    let currentSheet = 0;
+    let sheetCanvas = new OffscreenCanvas(
+      imageData.current![0].width,
+      imageData.current![0].height
+    );
+    sheetCanvas.getContext("2d")!.putImageData(imageData.current![0], 0, 0);
+    const frameCanvas = new OffscreenCanvas(frames[0].width, frames[0].height);
 
-    if (!drawContext || !imageContext)
-      throw new Error("error occurred zipping frames");
-
-    frames
-      .filter((f) => f.sheet == activeSheet)
-      .map(async (frame, i) => {
-        const filename = `${downloadPrefix}${i
-          .toString()
-          .padStart(4, "0")}.png`;
-
-        // Draw current frame to canvas, convert to blob
-        drawContext.putImageData(
-          imageContext.getImageData(
-            frame.x,
-            frame.y,
-            frame.width,
-            frame.height
-          ),
-          0,
-          0
+    for (let index = 0; index < frames.length; index++) {
+      let frame = frames[index];
+      // switch out the sheet canvas if the sheet has changed
+      if (frame.sheet != currentSheet) {
+        currentSheet = frame.sheet;
+        sheetCanvas = new OffscreenCanvas(
+          imageData.current![currentSheet].width,
+          imageData.current![currentSheet].height
         );
-        const dataURL = canvasRef.current!.toDataURL("image/png");
-        const blob = await (await fetch(dataURL)).blob();
+        sheetCanvas
+          .getContext("2d")!
+          .putImageData(imageData.current![currentSheet], 0, 0);
+      }
 
-        // Add the current canvas image data to the zip file
-        zipFile.current!.file(filename, blob);
-      });
+      let frameData = sheetCanvas
+        .getContext("2d")!
+        .getImageData(frame.x, frame.y, frame.width, frame.height);
+      frameCanvas.getContext("2d")!.putImageData(frameData, 0, 0);
 
-    if (activeSheet == numSheets - 1) {
-      // finalize the zip file and download it
-      const zipped = await zipFile.current!.generateAsync({ type: "blob" });
-      downloadRef.current!.download = "animation-frames.zip";
-      downloadRef.current!.href = URL.createObjectURL(zipped);
-      downloadRef.current!.click();
-      zipFile.current = undefined
-      setIsZipping(false)
-      setActiveSheet(0)
-    } else {
-      // zip the next sheet
-      setActiveSheet(activeSheet + 1);
+      const paddedIndex = index.toString().padStart(padLength, "0");
+      const filename = `${downloadPrefix}${paddedIndex}.png`;
+      const dataBlob = frameCanvas.convertToBlob({ type: "image/png" });
+      jsZip.file(filename, dataBlob);
     }
+
+    const zipped = await jsZip.generateAsync({ type: "blob" });
+    downloadRef.current!.download = "animation-frames.zip";
+    downloadRef.current!.href = URL.createObjectURL(zipped);
+    downloadRef.current!.click();
+    setIsZipping(false);
   };
 
   useEffect(() => {
-    if (!isZipping) {
-      if (frames[frameIndex].sheet == activeSheet) return;
-      // This handles if the user flips ahead between sheets instead
-      // of scrubbing between frames. If so, then we set the frameIndex
-      // to the first for the selected (active) sheet.
-      setFrameIndex(frames.findIndex((f) => f.sheet == activeSheet));
-    } else {
-      zipFramesForActiveSheet();
+    if (!offscreenCanvas.current) {
+      offscreenCanvas.current = new OffscreenCanvas(
+        imageData.current![activeSheet].width,
+        imageData.current![activeSheet].height
+      );
+      const context = offscreenCanvas.current.getContext("2d")!;
+      context.putImageData(imageData.current![activeSheet], 0, 0);
     }
+    if (frames[frameIndex].sheet == activeSheet) return;
+    // This handles if the user flips ahead between sheets instead
+    // of scrubbing between frames. If so, then we set the frameIndex
+    // to the first for the selected (active) sheet.
+    setFrameIndex(frames.findIndex((f) => f.sheet == activeSheet));
   }, [activeSheet]);
 
   return (
@@ -201,14 +207,9 @@ export default function FramePlayer({
               />
             </Tooltip>
           </Group>
-          <SheetNavigation
-            activeSheet={activeSheet}
-            setActiveSheet={setActiveSheet}
-            numSheets={numSheets}
-          />
           <Anchor ref={downloadRef} style={{ display: "none" }} />
           <Group align="flex-end">
-            <Tooltip label="Animation frame filenames will have format 'prefixNNNN.png' where NNNN is a number">
+            <Tooltip label="Animation frame filenames will have format 'prefixNNN.png' where NNN is a number">
               <TextInput
                 label="Export prefix"
                 value={downloadPrefix}
@@ -220,11 +221,8 @@ export default function FramePlayer({
             <Tooltip label="Download a zip file containing all animation frames as PNG images">
               <Button
                 leftSection={<IconDeviceFloppy />}
-                onClick={async () => {
-                  zipFile.current = new JSZip();
-                  setIsZipping(true);
-                  setActiveSheet(0);
-                }}
+                onClick={zipFrames}
+                loading={isZipping}
               >
                 Export Frames
               </Button>

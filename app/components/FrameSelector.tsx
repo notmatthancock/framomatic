@@ -2,16 +2,13 @@ import {
   Box as MantineBox,
   Button,
   Card,
-  Center,
   Flex,
   Group,
   Image,
-  Text,
   Stack,
   Title,
 } from "@mantine/core";
 import { useElementSize } from "@mantine/hooks";
-import { modals } from "@mantine/modals";
 import {
   Dispatch,
   SetStateAction,
@@ -24,40 +21,11 @@ import {
 import { DraggableData, Rnd } from "react-rnd";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-import type {
-  Frame,
-  SimpleModalInfo,
-  Size,
-  WizardStep,
-} from "@/app/types";
 import FirstFrameProps from "@/app/components/FrameProps";
-import HelpButton from "@/app/components/HelpButton";
+import openSimpleModal from "@/app/components/SimpleModal";
+import WizardNavigation from "@/app/components/WizardNavigation";
 import { frameInBounds, toTitle, transformCoords } from "@/app/utils";
-
-function openSimpleModal(modalInfo: SimpleModalInfo) {
-  modals.open({
-    withCloseButton: false,
-    title: modalInfo.title,
-    children: (
-      <>
-        {modalInfo.imageUrl !== null && (
-          <Center>
-            <Image
-              src={modalInfo.imageUrl}
-              alt={modalInfo.title}
-              w={200}
-              m="md"
-            />
-          </Center>
-        )}
-        <Text>{modalInfo.description}</Text>
-        <Flex align="center" justify="flex-end" direction="row">
-          <Button onClick={() => modals.closeAll()}>OK</Button>
-        </Flex>
-      </>
-    ),
-  });
-}
+import type { Frame, SimpleModalInfo, Size, WizardStep } from "@/app/types";
 
 export default function FrameSelector({
   wizardStep,
@@ -178,7 +146,7 @@ export default function FrameSelector({
   }, [frame, imageNaturalSize, setFrame]);
 
   useEffect(() => {
-    if (!(framePreviewCanvasRef.current && frame)) return;
+    if (!framePreviewCanvasRef.current || !frame) return;
     framePreviewCanvasRef.current!.width = frame.width;
     framePreviewCanvasRef.current!.height = frame.height;
     drawCurrentFrame();
@@ -186,112 +154,103 @@ export default function FrameSelector({
 
   return (
     <Group align="start">
-      <Card withBorder mr="md">
-        <Group align="center" justify="space-between" mb="sm">
-          <Title order={4}>{toTitle(wizardStep)}</Title>
-          <HelpButton
-            openModal={() => {
-              openSimpleModal(modalInfo);
-            }}
+      <WizardNavigation wizardStep={wizardStep} onPrev={onPrev} onNext={onNext}>
+        {frame && imageNaturalSize && (
+          <FirstFrameProps
+            frame={frame}
+            setFrame={setFrame}
+            lockAspectRatio={lockAspectRatio}
+            setLockAspectRatio={setLockAspectRatio}
+            imageSize={imageNaturalSize}
           />
-        </Group>
-        <Stack>
-          {frame && imageNaturalSize && (
-            <FirstFrameProps
-              frame={frame}
-              setFrame={setFrame}
-              lockAspectRatio={lockAspectRatio}
-              setLockAspectRatio={setLockAspectRatio}
-              imageSize={imageNaturalSize}
-            />
-          )}
-          <Flex direction="row" justify="space-between" align="center">
-            <Button onClick={onPrev}>Prev</Button>
-            <Button onClick={onNext}>Next</Button>
-          </Flex>
-        </Stack>
+        )}
+      </WizardNavigation>
+
+      <Card withBorder>
+        <TransformWrapper
+          panning={{ disabled: true }}
+          onZoomStop={(ref, event) => {
+            // TODO
+            console.log(ref.state);
+          }}
+        >
+          <TransformComponent>
+            <MantineBox
+              w="fit-content"
+              m="auto"
+              pos="relative"
+              mah="calc(100% - 80px - (1rem * 2))"
+            >
+              {elementBox != null && (
+                <Rnd
+                  bounds="parent"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "solid 1px red",
+                    borderStyle: "solid",
+                  }}
+                  lockAspectRatio={lockAspectRatio}
+                  size={{ width: elementBox.width, height: elementBox.height }}
+                  position={{ x: elementBox.x!, y: elementBox.y! }}
+                  onDrag={(e, dragData: DraggableData) => {
+                    if (!(frame && imageNaturalSize)) return;
+                    // we need to remap the coordinate of the drag from
+                    // element space to index space.
+                    const newXY = toIndexSpace({
+                      ...frame,
+                      x: dragData.x,
+                      y: dragData.y,
+                    });
+                    const newFrame = { ...frame, x: newXY.x, y: newXY.y };
+                    if (!frameInBounds(newFrame, imageNaturalSize)) return;
+                    setFrame(newFrame);
+                  }}
+                  onResizeStop={(e, dir, ref, delta, pos) => {
+                    if (!(frame && imageNaturalSize)) return;
+                    const newFrame = toIndexSpace({
+                      ...frame,
+                      x: pos.x,
+                      y: pos.y,
+                      width: parseInt(ref.style.width),
+                      height: parseInt(ref.style.height),
+                    });
+                    if (!frameInBounds(newFrame, imageNaturalSize)) return;
+                    setFrame(newFrame);
+                  }}
+                ></Rnd>
+              )}
+              <Image
+                radius="sm"
+                alt="Main image to divide into animation frames"
+                w={500}
+                h="auto"
+                src={imageUrl}
+                ref={imageRef}
+                onLoad={(e) => {
+                  const img: HTMLImageElement = e.currentTarget;
+                  // Draw image to invisible canvas to extract to image data
+                  const h = img.naturalHeight;
+                  const w = img.naturalWidth;
+                  const canvas = imageDataCanvasRef.current!;
+                  canvas.width = w;
+                  canvas.height = h;
+                  const context = canvas.getContext("2d")!;
+                  context.drawImage(img, 0, 0);
+                  // Initialize the frame if not null. The frame is not null
+                  // if the user is navigating background after having already
+                  // chosen a frame.
+                  if (!frame)
+                    setFrame(frameInitializer({ width: w, height: h }));
+                  drawCurrentFrame();
+                }}
+              />
+            </MantineBox>
+          </TransformComponent>
+        </TransformWrapper>
       </Card>
 
-      <TransformWrapper
-        panning={{ disabled: true }}
-        onZoomStop={(ref, event) => {
-          // TODO
-          console.log(ref.state);
-        }}
-      >
-        <TransformComponent>
-          <MantineBox
-            w="fit-content"
-            m="auto"
-            pos="relative"
-            mah="calc(100% - 80px - (1rem * 2))"
-          >
-            {elementBox != null && (
-              <Rnd
-                bounds="parent"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "solid 1px red",
-                  borderStyle: "solid",
-                }}
-                lockAspectRatio={lockAspectRatio}
-                size={{ width: elementBox.width, height: elementBox.height }}
-                position={{ x: elementBox.x!, y: elementBox.y! }}
-                onDrag={(e, dragData: DraggableData) => {
-                  if (!(frame && imageNaturalSize)) return;
-                  // we need to remap the coordinate of the drag from
-                  // element space to index space.
-                  const newXY = toIndexSpace({
-                    ...frame,
-                    x: dragData.x,
-                    y: dragData.y,
-                  });
-                  const newFrame = { ...frame, x: newXY.x, y: newXY.y };
-                  if (!frameInBounds(newFrame, imageNaturalSize)) return;
-                  setFrame(newFrame);
-                }}
-                onResizeStop={(e, dir, ref, delta, pos) => {
-                  if (!(frame && imageNaturalSize)) return;
-                  const newFrame = toIndexSpace({
-                    ...frame,
-                    x: pos.x,
-                    y: pos.y,
-                    width: parseInt(ref.style.width),
-                    height: parseInt(ref.style.height),
-                  });
-                  if (!frameInBounds(newFrame, imageNaturalSize)) return;
-                  setFrame(newFrame);
-                }}
-              ></Rnd>
-            )}
-            <Image
-              radius="sm"
-              alt="Main image to divide into animation frames"
-              w={500}
-              h="auto"
-              src={imageUrl}
-              ref={imageRef}
-              onLoad={(e) => {
-                const img: HTMLImageElement = e.currentTarget;
-                // Draw image to invisible canvas to extract to image data
-                const h = img.naturalHeight;
-                const w = img.naturalWidth;
-                const canvas = imageDataCanvasRef.current!;
-                canvas.width = w;
-                canvas.height = h;
-                const context = canvas.getContext("2d")!;
-                context.drawImage(img, 0, 0);
-                // Initialize the frame if not null. The frame is not null
-                // if the user is navigating background after having already
-                // chosen a frame.
-                if (!frame) setFrame(frameInitializer({ width: w, height: h }));
-              }}
-            />
-          </MantineBox>
-        </TransformComponent>
-      </TransformWrapper>
       <canvas
         ref={framePreviewCanvasRef}
         style={{

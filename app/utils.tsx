@@ -5,6 +5,7 @@ import type {
   GridOptions,
   Size,
   SpatialPosition,
+  WizardStep,
 } from "@/app/types";
 
 /** True if two line segments (a1, b1) and (a2, b2) overlap */
@@ -154,4 +155,38 @@ export function transformCoords(
     width: frame.width * horizontalFactor,
     height: frame.height * verticalFactor,
   };
+}
+
+export function prevWizardStep(step: WizardStep): WizardStep | null {
+  switch (step) {
+    case "sheetsUpload":
+      return null;
+    case "gridDimensions":
+      return "sheetsUpload";
+    case "firstFrame":
+      return "gridDimensions";
+    case "frameSpacing":
+      return "firstFrame";
+    case "frameDetection":
+      return "frameSpacing";
+    default:
+      throw new Error(`unknown step ${step}`);
+  }
+}
+
+export function nextWizardStep(step: WizardStep): WizardStep | null {
+  switch (step) {
+    case "sheetsUpload":
+      return "gridDimensions";
+    case "gridDimensions":
+      return "firstFrame";
+    case "firstFrame":
+      return "frameSpacing";
+    case "frameSpacing":
+      return "frameDetection";
+    case "frameDetection":
+      return null;
+    default:
+      throw new Error(`unknown step ${step}`);
+  }
 }

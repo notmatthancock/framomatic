@@ -6,22 +6,24 @@ export default function SheetNavigation({
   activeSheet,
   setActiveSheet,
   numSheets,
+  disabled,
 }: {
   activeSheet: number;
   setActiveSheet: Dispatch<SetStateAction<number>>;
   numSheets: number;
+  disabled?: boolean;
 }) {
   return (
     <Group>
       <Button
-        disabled={activeSheet == 0}
+        disabled={disabled || activeSheet == 0}
         onClick={() => setActiveSheet((a) => a - 1)}
       >
         <IconArrowLeftBar />
       </Button>
       <Text>Sheet {activeSheet + 1}</Text>
       <Button
-        disabled={activeSheet == numSheets - 1}
+        disabled={disabled || activeSheet == numSheets - 1}
         onClick={() => setActiveSheet((a) => a + 1)}
       >
         <IconArrowRightBar />

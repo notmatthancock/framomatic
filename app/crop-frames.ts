@@ -208,23 +208,30 @@ function cropFramesFromImage(
 cv["onRuntimeInitialized"] = () => {
   onmessage = (e) => {
     const {
-      sheet,
       imageData,
       firstFrame,
       frameSpacingBox,
       gridDimensions,
     }: {
-      sheet: number;
       imageData: ImageData;
       firstFrame: Frame;
       frameSpacingBox: Box;
       gridDimensions: Grid;
     } = e.data;
-    const imageMat = cv.matFromImageData(imageData);
-    const frameSpacingHeight = frameSpacingBox.height - 2 * firstFrame.height;
-    const frameSpacingWidth = frameSpacingBox.width - 2 * firstFrame.width;
 
     try {
+
+      const imageMat = cv.matFromImageData(imageData);
+      const frameSpacingHeight = frameSpacingBox.height - 2 * firstFrame.height;
+      const frameSpacingWidth = frameSpacingBox.width - 2 * firstFrame.width;
+
+      // This is a bit hacky. templateImage is global state
+      // so that it persists betweeen detections for adjacent
+      // sheets. An alternative would be to post the template
+      // image on the "sheet end" message. But cv.Mat isn't
+      // serializable.
+      if (firstFrame.sheet == 0) templateImage = null
+      // assign to templateImage so that it is used on the next sheet
       templateImage = cropFramesFromImage(
         imageMat,
         firstFrame,
@@ -237,6 +244,7 @@ cv["onRuntimeInitialized"] = () => {
       );
     } catch (err: any) {
       const errMsg: WorkerMessage = {type: "error", error: err.stack}
+      console.error(err)
       postMessage(errMsg)
     }
   };

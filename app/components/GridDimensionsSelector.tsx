@@ -1,17 +1,10 @@
 import { Dispatch, SetStateAction, useState } from "react";
-import {
-  Button,
-  Card,
-  Flex,
-  Group,
-  Image,
-  NumberInput,
-  Stack,
-} from "@mantine/core";
+import { Group, Image, NumberInput, Stack } from "@mantine/core";
 import { modals } from "@mantine/modals";
 
-import SheetNavigation from "@/app/components/SheetNavigation"
+import SheetNavigation from "@/app/components/SheetNavigation";
 import { Grid, WizardStep } from "@/app/types";
+import WizardNavigation from "./WizardNavigation";
 
 function GridDimsSelectorInputs({
   gridDims,
@@ -60,7 +53,7 @@ function GridDimsSelectorInputs({
   );
 }
 
-export default function GridDimsSelector({
+export default function GridDimensionsSelector({
   imageUrls,
   gridDims,
   setGridDims,
@@ -77,7 +70,29 @@ export default function GridDimsSelector({
 
   return (
     <Group align="start">
-      <Card withBorder mr="md">
+      <WizardNavigation
+        wizardStep={"gridDimensions"}
+        onPrev={() => {
+          setImageUrls([]);
+          setWizardStep("sheetsUpload");
+        }}
+        nextDisabled={gridDims.nRows == 0 || gridDims.nCols == 0}
+        onNext={() => {
+          modals.openConfirmModal({
+            title: "Confirm Grid Dimensions",
+            children: (
+              <>
+                You selected {gridDims.nRows} rows x {gridDims.nCols} columns.
+                Confirm to continue.
+              </>
+            ),
+            labels: { confirm: "Confirm", cancel: "Cancel" },
+            onConfirm: () => {
+              setWizardStep("firstFrame");
+            },
+          });
+        }}
+      >
         <Stack>
           <SheetNavigation
             activeSheet={activeSheet}
@@ -88,35 +103,9 @@ export default function GridDimsSelector({
             gridDims={gridDims}
             setGridDims={setGridDims}
           />
-
-          <Flex direction="row" justify="space-between" align="center">
-            <Button onClick={() => {
-              setImageUrls([])
-              setWizardStep("sheetsUpload")
-            }}>Prev</Button>
-            <Button
-              disabled={gridDims.nRows == 0 || gridDims.nCols == 0}
-              onClick={() => {
-                modals.openConfirmModal({
-                  title: "Confirm Grid Dimensions",
-                  children: (
-                    <>
-                      You selected {gridDims.nRows} rows x {gridDims.nCols}{" "}
-                      columns. Confirm to continue.
-                    </>
-                  ),
-                  labels: { confirm: "Confirm", cancel: "Cancel" },
-                  onConfirm: () => {
-                    setWizardStep("firstFrame");
-                  },
-                });
-              }}
-            >
-              Next
-            </Button>
-          </Flex>
         </Stack>
-      </Card>
+      </WizardNavigation>
+
       {imageUrls.map((url, index) => {
         return (
           index == activeSheet && (
