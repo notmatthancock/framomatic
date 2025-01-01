@@ -138,7 +138,6 @@ function cropFramesFromImage(
   let currFrame = { ...firstFrame };
 
   if (templateImage === null) {
-    console.log("template image is null");
     templateImage = cropFromFrame(firstFrame, image);
   } else {
     // Only needed when handling sheets (images) beyond
@@ -243,8 +242,8 @@ cv["onRuntimeInitialized"] = () => {
         templateImage
       );
     } catch (err: any) {
+      console.trace()
       const errMsg: WorkerMessage = {type: "error", error: err.stack}
-      console.error(err)
       postMessage(errMsg)
     }
   };

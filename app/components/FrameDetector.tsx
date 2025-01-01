@@ -20,8 +20,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Rnd } from "react-rnd";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { DraggableData, Rnd } from "react-rnd";
 
 import FramePlayer from "@/app/components/FramePlayer";
 import SheetNavigation from "@/app/components/SheetNavigation";
@@ -154,6 +153,33 @@ export default function FrameDetector({
     return transformCoords(f, sourceSize, activeImageSize);
   };
 
+  // Coordinate transform to "index space", the coordinate system
+  // of the full-res image
+  const toIndexSpace = (f: Frame): Frame => {
+    if (!activeImageSize)
+      throw new Error(
+        "Cannot transform coordinates to element space because active image size is null"
+      );
+    const targetSize = {
+      width: imageData.current[activeSheet].width,
+      height: imageData.current[activeSheet].height,
+    };
+    return transformCoords(f, activeImageSize, targetSize);
+  };
+
+  // Construct a lookup from frame row/col/sheet to index in
+  // the frames list. Since the frames are filtered based on
+  // active sheet, we can't do it in the frames loop, and since
+  // The lookup is needed on every drag event, we use a map
+  // for the lookup for speed.
+  const frameLookupKey = (f: Frame): string => {
+    return `row: ${f.row} col: ${f.col} sheet: ${f.sheet}`;
+  };
+  const frameIndexLookup = new Map();
+  frames.forEach((frame, index) => {
+    frameIndexLookup.set(frameLookupKey(frame), index);
+  });
+
   return (
     <Group align="start">
       <WizardNavigation
@@ -183,94 +209,101 @@ export default function FrameDetector({
         </Stack>
       </WizardNavigation>
       <Card withBorder>
-        <TransformWrapper
-          panning={{ disabled: true }}
-          onZoomStop={(ref, event) => {
-            // TODO
-            console.log(ref.state);
-          }}
+        <MantineBox
+          w="fit-content"
+          m="auto"
+          pos="relative"
+          mah="calc(100% - 80px - (1rem * 2))"
         >
-          <TransformComponent>
-            <MantineBox
-              w="fit-content"
-              m="auto"
-              pos="relative"
-              mah="calc(100% - 80px - (1rem * 2))"
-            >
-              {imageUrls.map((url, index) => (
-                <Image
-                  w={500}
-                  key={index}
-                  src={url}
-                  // ref={(el) => {
-                  //   imageRefs.current[index] = el;
-                  // }}
-                  alt={`Contact Sheet ${index}`}
+          {imageUrls.map((url, index) => (
+            <Image
+              w={500}
+              key={index}
+              src={url}
+              // ref={(el) => {
+              //   imageRefs.current[index] = el;
+              // }}
+              alt={`Contact Sheet ${index}`}
+              style={{
+                display: index == activeSheet ? "block" : "none",
+              }}
+              onLoad={async (event) => {
+                const imageElement = event.currentTarget;
+                imageRefs.current[index] = imageElement;
+                const bitmap = await createImageBitmap(imageElement);
+                const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+                const context = canvas.getContext("2d")!;
+                context.drawImage(bitmap, 0, 0);
+                imageData.current[index] = context.getImageData(
+                  0,
+                  0,
+                  bitmap.width,
+                  bitmap.height
+                );
+                imagesLoadedCounter.current++;
+                if (index == activeSheet) {
+                  const rect = imageElement.getBoundingClientRect();
+                  setActiveImageSize({
+                    width: rect.width,
+                    height: rect.height,
+                  });
+                }
+                if (imagesLoadedCounter.current == imageUrls.length) {
+                  detectFrames(0);
+                }
+              }}
+            />
+          ))}
+          {frames
+            .filter((f) => f.sheet == activeSheet)
+            .map((frame, i) => {
+              const elementFrame = toElementSpace(frame);
+              return (
+                <Rnd
+                  resizable={false}
+                  key={i}
+                  bounds="parent"
                   style={{
-                    display: index == activeSheet ? "block" : "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "solid 1px red",
                   }}
-                  onLoad={async (event) => {
-                    const imageElement = event.currentTarget;
-                    imageRefs.current[index] = imageElement;
-                    const bitmap = await createImageBitmap(imageElement);
-                    const canvas = new OffscreenCanvas(
-                      bitmap.width,
-                      bitmap.height
-                    );
-                    const context = canvas.getContext("2d")!;
-                    context.drawImage(bitmap, 0, 0);
-                    imageData.current[index] = context.getImageData(
-                      0,
-                      0,
-                      bitmap.width,
-                      bitmap.height
-                    );
-                    imagesLoadedCounter.current++;
-                    if (index == activeSheet) {
-                      const rect = imageElement.getBoundingClientRect();
-                      setActiveImageSize({
-                        width: rect.width,
-                        height: rect.height,
-                      });
-                    }
-                    if (imagesLoadedCounter.current == imageUrls.length) {
-                      detectFrames(0);
-                    }
+                  size={{
+                    width: elementFrame.width,
+                    height: elementFrame.height,
+                  }}
+                  position={{ x: elementFrame.x, y: elementFrame.y }}
+                  disableDragging={frame.locked}
+                  onDrag={(e, dragData: DraggableData) => {
+                    if (!activeImageSize) return;
+                    // we need to remap the coordinate of the drag from
+                    // element space to index space.
+                    const newXY = toIndexSpace({
+                      ...frame,
+                      x: dragData.x,
+                      y: dragData.y,
+                    });
+                    const newFrame = { ...frame, x: newXY.x, y: newXY.y };
+                    setFrames((oldFrames) => {
+                      let newFrames = [...oldFrames];
+                      const index = frameIndexLookup.get(frameLookupKey(newFrame))
+                      if (index === undefined) {
+                        throw new Error(`Could not find frame index for frame ${newFrame}`)
+                      }
+                      newFrames[index] = newFrame;
+                      return newFrames;
+                    });
                   }}
                 />
-              ))}
-              {frames
-                .filter((f) => f.sheet == activeSheet)
-                .map((frame, i) => {
-                  const elementFrame = toElementSpace(frame);
-                  return (
-                    <Rnd
-                      key={i}
-                      bounds="parent"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: "solid 1px red",
-                      }}
-                      size={{
-                        width: elementFrame.width,
-                        height: elementFrame.height,
-                      }}
-                      position={{ x: elementFrame.x, y: elementFrame.y }}
-                      disableDragging={frame.locked}
-                    />
-                  );
-                })}
-            </MantineBox>
-          </TransformComponent>
-        </TransformWrapper>
+              );
+            })}
+        </MantineBox>
       </Card>
       {!computing && (
         <FramePlayer
           frames={frames}
           imageData={imageData}
-          // imageCanvasRef={canvasRef}
           activeSheet={activeSheet}
           setActiveSheet={setActiveSheet}
         />

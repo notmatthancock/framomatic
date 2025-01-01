@@ -69,7 +69,7 @@ export default function FramePlayer({
     context.putImageData(imageData.current![activeSheet], 0, 0);
   }
 
-  const drawCurrentFrame = useCallback(
+  const drawFrame = useCallback(
     (index: number) => {
       if (!canvasRef.current || !offscreenCanvas.current) return;
 
@@ -89,19 +89,9 @@ export default function FramePlayer({
 
   const frameDelay = (1 / parseFloat(fps as string)) * 1000;
   const animate = () => {
-    // drawCurrentFrame(frameIndex)
     setFrameIndex((i) => (i + 1) % frames.length);
     animationId.current = window.setTimeout(animate, frameDelay);
   };
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    // Set width/height of frame player canvas
-    canvasRef.current.width = frames[frameIndex].width;
-    canvasRef.current.height = frames[frameIndex].height;
-    setActiveSheet(frames[frameIndex].sheet);
-    drawCurrentFrame(frameIndex);
-  }, [drawCurrentFrame, frameIndex, frames, setActiveSheet]);
 
   const zipFrames = async () => {
     setIsZipping(true);
@@ -150,6 +140,18 @@ export default function FramePlayer({
   };
 
   useEffect(() => {
+    if (!canvasRef.current) return;
+    // Set width/height of frame player canvas
+    canvasRef.current.width = frames[frameIndex].width;
+    canvasRef.current.height = frames[frameIndex].height;
+    if (frames[frameIndex].sheet != activeSheet) {
+      setActiveSheet(frames[frameIndex].sheet);
+    } else {
+      drawFrame(frameIndex);
+    }
+  }, [drawFrame, frameIndex, frames, setActiveSheet]);
+
+  useEffect(() => {
     if (!offscreenCanvas.current) {
       offscreenCanvas.current = new OffscreenCanvas(
         imageData.current![activeSheet].width,
@@ -158,11 +160,14 @@ export default function FramePlayer({
       const context = offscreenCanvas.current.getContext("2d")!;
       context.putImageData(imageData.current![activeSheet], 0, 0);
     }
-    if (frames[frameIndex].sheet == activeSheet) return;
-    // This handles if the user flips ahead between sheets instead
-    // of scrubbing between frames. If so, then we set the frameIndex
-    // to the first for the selected (active) sheet.
-    setFrameIndex(frames.findIndex((f) => f.sheet == activeSheet));
+    if (frames[frameIndex].sheet == activeSheet) {
+      drawFrame(frameIndex);
+    } else {
+      // This handles if the user flips ahead between sheets instead
+      // of scrubbing between frames. If so, then we set the frameIndex
+      // to the first for the selected (active) sheet.
+      setFrameIndex(frames.findIndex((f) => f.sheet == activeSheet));
+    }
   }, [activeSheet]);
 
   return (
