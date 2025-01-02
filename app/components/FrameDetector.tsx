@@ -260,7 +260,7 @@ export default function FrameDetector({
               const elementFrame = toElementSpace(frame);
               return (
                 <Rnd
-                  resizable={false}
+                  enableResizing={false}
                   key={i}
                   bounds="parent"
                   style={{
