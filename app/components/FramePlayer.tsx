@@ -140,7 +140,7 @@ export default function FramePlayer({
   };
 
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !frames[frameIndex]) return;
     // Set width/height of frame player canvas
     canvasRef.current.width = frames[frameIndex].width;
     canvasRef.current.height = frames[frameIndex].height;
@@ -152,6 +152,7 @@ export default function FramePlayer({
   }, [drawFrame, frameIndex, frames, setActiveSheet]);
 
   useEffect(() => {
+    if (!frames[frameIndex]) return
     if (!offscreenCanvas.current) {
       offscreenCanvas.current = new OffscreenCanvas(
         imageData.current![activeSheet].width,

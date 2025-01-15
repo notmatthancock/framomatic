@@ -184,6 +184,7 @@ export default function FrameDetector({
     <Group align="start">
       <WizardNavigation
         wizardStep={wizardStep}
+        prevDisabled={computing}
         onPrev={() => {
           setFrames([]);
           setWizardStep("frameSpacing");

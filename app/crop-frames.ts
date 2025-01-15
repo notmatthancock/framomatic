@@ -118,6 +118,10 @@ function adjustFramePosition(
   // @ts-ignore
   let minMax = cv.minMaxLoc(result);
 
+  // deallocate memory from intermediate matrices
+  searchImage.delete()
+  result.delete()
+
   return { ...frame, x: minMax.maxLoc.x + xmin, y: minMax.maxLoc.y + ymin };
 }
 
@@ -182,16 +186,20 @@ function cropFramesFromImage(
       [0, 0, 0, 0]
     );
 
-    for (const frame of frames) {
+    for (const frame of frames.slice(0, 1)) {
+      const frameMat = cropFromFrame(frame, image)
       cv.addWeighted(
         meanImage,
         1,
-        cropFromFrame(frame, image),
+        frameMat,
         1 / frames.length,
         0,
         meanImage
       );
+      frameMat.delete()
     }
+    // deallocate the previous template image before assigning the new one
+    templateImage.delete()
     templateImage = meanImage;
 
     currFrame = nextFrame;
@@ -229,9 +237,12 @@ cv["onRuntimeInitialized"] = () => {
       // sheets. An alternative would be to post the template
       // image on the "sheet end" message. But cv.Mat isn't
       // serializable.
-      if (firstFrame.sheet == 0) templateImage = null
+      if (firstFrame.sheet == 0 && templateImage !== null) {
+        templateImage.deallocate
+        templateImage = null
+      }
       // assign to templateImage so that it is used on the next sheet
-      templateImage = cropFramesFromImage(
+      const newTemplateImage = cropFramesFromImage(
         imageMat,
         firstFrame,
         frameSpacingWidth,
@@ -241,6 +252,8 @@ cv["onRuntimeInitialized"] = () => {
         16,
         templateImage
       );
+      // deallocate old template image and assign the new one
+      templateImage = newTemplateImage
     } catch (err: any) {
       console.trace()
       const errMsg: WorkerMessage = {type: "error", error: err.stack}
