@@ -1,22 +1,19 @@
 import "@mantine/core/styles.css";
-import '@mantine/carousel/styles.css';
 import "@mantine/dropzone/styles.css";
+import getConfig from "next/config";
 
 import {
   AppShell,
-  AppShellFooter,
   AppShellHeader,
   AppShellMain,
-  Center,
   ColorSchemeScript,
-  Group,
-  Image,
   MantineProvider,
-  Text,
 } from "@mantine/core";
 import { ModalsProvider } from "@mantine/modals";
 import type { Metadata } from "next";
 import { theme } from "../theme";
+
+import AppHeader from "@/app/components/AppHeader"
 
 export const metadata: Metadata = {
   title: "Framomatic",
@@ -28,6 +25,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { publicRuntimeConfig } = getConfig();
+
   return (
     <html lang="en">
       <head>
@@ -42,23 +41,14 @@ export default function RootLayout({
         <MantineProvider theme={theme}>
           <ModalsProvider>
             <AppShell
-              header={{ height: 60 }}
-              footer={{ height: 40 }}
+              header={{ height: 30 }}
+              // footer={{ height: 40 }}
               padding="md"
             >
               <AppShellHeader>
-                <Group h="100%" px="md">
-                  <Image src="logo.png" alt="Framomatic logo" h={30} />
-                </Group>
+                <AppHeader appVersion={publicRuntimeConfig.appVersion} />
               </AppShellHeader>
               <AppShellMain>{children}</AppShellMain>
-              <AppShellFooter>
-                <Center>
-                  <Text size="sm" c="dimmed">
-                    TODO add a footer with some info or whatever
-                  </Text>
-                </Center>
-              </AppShellFooter>
             </AppShell>
           </ModalsProvider>
         </MantineProvider>
