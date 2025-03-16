@@ -1,11 +1,19 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const data = require("./package.json");
+
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    webpack5: true,
     webpack: (config) => {
       config.resolve.fallback = { fs: false };
       return config;
     },
-
+    publicRuntimeConfig: {
+      appVersion: data.version
+    },
+    distDir: 'build',
+    output: 'export',
 };
 
 export default nextConfig;

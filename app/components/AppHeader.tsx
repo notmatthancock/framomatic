@@ -1,6 +1,6 @@
 "use client";
 
-import { Anchor, Group, Image, Modal, Text, Title } from "@mantine/core";
+import { Anchor, Group, Image, List, Modal, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 
 export default function AppShellHeader({ appVersion }: { appVersion: string }) {
@@ -8,7 +8,7 @@ export default function AppShellHeader({ appVersion }: { appVersion: string }) {
 
   return (
     <Group h="100%" px="md">
-      <Modal opened={opened} onClose={close}>
+      <Modal opened={opened} onClose={close} size="lg" m="xl">
         <Image src="logo.png" alt="Framomatic logo" w={200} />
         <Anchor
           href={`https://github.com/notmatthancock/framomatic/tree/${appVersion}`}
@@ -16,31 +16,41 @@ export default function AppShellHeader({ appVersion }: { appVersion: string }) {
           Framomatic version {appVersion}
         </Anchor>
 
-        <Text mt="lg" mb="lg">
-          I built this application to automate the cropping process for creating
-          animation frames from multiple scanned &quot;contact sheets&quot;.
-        </Text>
-        <Text mt="lg" mb="lg">
-          Typically this process involves opening a scanned sheet in your
-          favorite image editing tool and then manually cropping and exporting
-          each frame, exporting the individual images. This process is extremely
-          tedious and error prone -- hence this application!
-        </Text>
-
-        <Title order={5}>Caveats</Title>
-        <Text mt="lg" mb="lg">
-          This application is free. So it&apos;s not super polished, and
-          it&apos;s definitely not perfect. Be aware that there are some memory
-          limitations working within the web browser. If you have many sheets or
-          if you have extremely large images, it is likely that you may
-          experience issues.
+        <Text m="lg">
+          <List>
+            <List.Item>
+              This application automates the tedious process of creating
+              animation frames from scanned{" "}
+              <a href="https://en.wikipedia.org/wiki/Contact_print">
+                contact sheets
+              </a>
+              .
+            </List.Item>
+            <List.Item>
+              Instead of manually cropping each frame using in an image editor,
+              this tool helps you extract them quickly.
+            </List.Item>
+          </List>
         </Text>
 
-        <Title order={5}>Donating</Title>
+        <Title order={5}>Limitations</Title>
+        <Text m="lg">
+          <List>
+            <List.Item>
+              This is a free, unpolished application. It may not be perfect.
+            </List.Item>
+            <List.Item>
+              Browser memory limitations may cause issues with large images or
+              many sheets.
+            </List.Item>
+          </List>
+        </Text>
 
-        <Text mt="lg" mb="lg">
-          I built this application in my free time. If you found it useful and
-          would like to donate, use this link:
+        <Title order={5}>Donations</Title>
+
+        <Text m="lg">
+          I built this application in my free time. If you found it useful,
+          consider donating:
         </Text>
         <Anchor
           href="https://www.buymeacoffee.com/notmatthancock"

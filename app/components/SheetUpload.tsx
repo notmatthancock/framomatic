@@ -27,18 +27,12 @@ export default function SheetUpload({
             <IconUpload
               size="3.2rem"
               stroke={1.5}
-              color={
-                theme.colors[theme.primaryColor][
-                  theme.colorScheme === "dark" ? 4 : 6
-                ]
-              }
             />
           </Dropzone.Accept>
           <Dropzone.Reject>
             <IconX
               size="3.2rem"
               stroke={1.5}
-              color={theme.colors.red[theme.colorScheme === "dark" ? 4 : 6]}
             />
           </Dropzone.Reject>
           <Dropzone.Idle>
