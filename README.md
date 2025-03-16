@@ -1,4 +1,4 @@
-![framomatic logo](public/logo.png)
+## Framomatic
 
 convert sheets          | → | animation frames
 :----------------------:|:-:|:-----------------------:
