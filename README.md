@@ -2,7 +2,7 @@
 
 convert sheets          | → | animation frames
 :----------------------:|:-:|:-----------------------:
-![demo pic](demo.png)   |   | ![demo video](demo.mp4)
+![demo pic](demo.png)   |   | ![demo video](demo.gif)
 
 This is an application for turning images containing a grid of animation frames (i.e., a "contact sheet" or "contact print") into individual cropped images per frame. You can export the result as a zip of images that can subsequently be converted into a movie format (e.g., using [ffmpeg](https://superuser.com/a/1462082)).
 
