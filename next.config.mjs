@@ -11,8 +11,8 @@ const nextConfig = {
   publicRuntimeConfig: {
     appVersion: data.version,
   },
-  assetPrefix: process.env?.URL_PREFIX,
-  basePath: process.env?.URL_PREFIX,
+  assetPrefix: process.env?.ASSET_PREFIX,
+  basePath: process.env?.BASE_PATH,
   distDir: "build",
   output: "export",
 };
