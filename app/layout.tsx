@@ -13,7 +13,7 @@ import { ModalsProvider } from "@mantine/modals";
 import type { Metadata } from "next";
 import { theme } from "../theme";
 
-import AppHeader from "@/app/components/AppHeader"
+import AppHeader from "@/app/components/AppHeader";
 
 export const metadata: Metadata = {
   title: "Framomatic",
@@ -40,11 +40,7 @@ export default function RootLayout({
       <body>
         <MantineProvider theme={theme}>
           <ModalsProvider>
-            <AppShell
-              header={{ height: 30 }}
-              // footer={{ height: 40 }}
-              padding="md"
-            >
+            <AppShell padding="md">
               <AppShellHeader>
                 <AppHeader appVersion={publicRuntimeConfig.appVersion} />
               </AppShellHeader>
